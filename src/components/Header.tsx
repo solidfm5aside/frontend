@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 export default function Header() {
@@ -45,13 +46,19 @@ export default function Header() {
       <div className="container mx-auto flex max-w-7xl items-center justify-between px-6">
         
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-4 group shrink-0" onClick={() => setActiveHash('')}>
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 font-black text-white shadow-lg shadow-blue-600/20 transition-transform group-hover:scale-110">SFM</div>
+        <Link href="/" className="flex items-center gap-3 group shrink-0" onClick={() => setActiveHash('')}>
+          <div className="relative h-12 w-12 overflow-hidden rounded-full border-2 border-[#FFD700] shadow-lg shadow-yellow-500/20 transition-transform group-hover:scale-110">
+            <Image 
+              src="/assets/logos/solid-5aside.png" 
+              alt="Solid 5-Aside Badge" 
+              fill
+              className="object-cover"
+            />
+          </div>
           <div className="flex flex-col">
-            <h1 className="text-xl font-black tracking-tighter text-white leading-none">
-              CoJude <span className="text-blue-500 italic">Solid FM</span>
+            <h1 className="text-xl font-black tracking-tighter text-white uppercase leading-none">
+              Solid FM <span className="text-[#FFD700]">5-Aside</span>
             </h1>
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-neutral-500">Coal City Elite</span>
           </div>
         </Link>
 
@@ -76,10 +83,10 @@ export default function Header() {
                   <Link 
                     href={link.href} 
                     onClick={() => setActiveHash(linkHash)}
-                    className={`relative py-2 transition-all duration-300 hover:text-white ${isActive ? 'text-blue-500' : ''} group`}
+                    className={`relative py-2 transition-all duration-300 hover:text-white ${isActive ? 'text-[#FFD700]' : ''} group`}
                   >
                     {link.name}
-                    <span className={`absolute -bottom-1 left-0 h-1 bg-blue-500 transition-all duration-300 ${isActive ? 'w-full opacity-100 shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 'w-0 opacity-0 group-hover:w-full group-hover:opacity-50'}`}></span>
+                    <span className={`absolute -bottom-1 left-0 h-1 bg-[#FFD700] transition-all duration-300 ${isActive ? 'w-full opacity-100 shadow-[0_0_10px_rgba(255,215,0,0.5)]' : 'w-0 opacity-0 group-hover:w-full group-hover:opacity-50'}`}></span>
                   </Link>
                 </li>
               );
@@ -91,9 +98,9 @@ export default function Header() {
         <div className="flex items-center gap-4">
           <Link 
             href="/register-team" 
-            className="hidden sm:inline-flex rounded-2xl bg-white px-7 py-3 text-[11px] font-black uppercase tracking-widest text-black transition-all hover:bg-blue-600 hover:text-white hover:scale-105 active:scale-95 shadow-xl shadow-white/5"
+            className="hidden sm:inline-flex rounded-2xl bg-[#FFD700] px-7 py-3 text-[11px] font-black uppercase tracking-widest text-black transition-all hover:bg-white hover:scale-105 active:scale-95 shadow-xl shadow-yellow-600/20"
           >
-            Join Tournament
+            Register Now
           </Link>
 
           {/* Mobile Menu Toggle */}

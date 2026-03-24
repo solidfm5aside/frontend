@@ -49,19 +49,20 @@ export default function Home() {
               </span>
             </div>
             
-            <h1 className="mb-8 font-outfit text-5xl font-extrabold tracking-tight text-white sm:text-8xl lg:text-9xl leading-[0.95] perspective-1000">
-              Beyond the <br />
-              <span className="text-blue-500 italic drop-shadow-[0_0_30px_rgba(37,99,235,0.4)]">Game.</span>
+            <h1 className="mb-8 font-outfit text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-8xl leading-[0.95] perspective-1000 uppercase">
+              Solid FM <br />
+              <span className="text-[#FFD700] drop-shadow-[0_0_40px_rgba(255,215,0,0.4)]">5-Aside</span> <br />
+              <span className="text-white text-4xl sm:text-6xl lg:text-7xl">Football</span>
             </h1>
             
             <p className="mx-auto mb-16 max-w-2xl text-lg font-medium text-neutral-400 sm:text-xl md:text-2xl leading-relaxed">
-              The premier grassroots 5-A-Side tournament in the <span className="text-white font-bold italic tracking-wide">Coal City</span>. Empowering Enugu's elite football talent.
+              Enugu's Premier Grassroots 5-A-Side Tournament. Sponsored by <span className="text-white font-bold tracking-wide">CoJude International</span> in Partnership with <span className="text-[#FFD700] font-bold tracking-wide">ENSFA</span>.
             </p>
             
             <div className="flex flex-col items-center justify-center gap-6 sm:flex-row mb-12">
-              <Link href="/register-team" className="h-16 md:h-20 w-full md:w-auto inline-flex items-center justify-center rounded-3xl bg-blue-600 px-10 md:px-16 text-sm md:text-xl font-black uppercase italic tracking-widest text-white hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-blue-600/20">
-            Register Squad
-          </Link>
+              <Link href="/register-team" className="h-16 md:h-20 w-full md:w-auto inline-flex items-center justify-center rounded-3xl bg-[#FFD700] px-10 md:px-16 text-sm md:text-xl font-black uppercase italic tracking-widest text-black hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-yellow-600/20">
+                Register Squad
+              </Link>
               <a href="/fixtures" className="h-16 w-full rounded-2xl border border-white/10 bg-white/5 px-10 text-lg font-bold text-white backdrop-blur-md transition-all hover:bg-white/10 sm:w-auto flex items-center justify-center">
                 View Schedule
               </a>
@@ -85,7 +86,7 @@ export default function Home() {
                      <span className="text-[8px] md:text-[9px] uppercase tracking-[0.2em] text-neutral-600 font-black">Matches</span>
                   </div>
                   <div className="flex flex-col">
-                     <span className="text-2xl md:text-3xl font-black text-blue-500 italic">₦500K</span>
+                     <span className="text-2xl md:text-3xl font-black text-[#FFD700] italic">₦500K</span>
                      <span className="text-[8px] md:text-[9px] uppercase tracking-[0.2em] text-neutral-600 font-black">Prize</span>
                   </div>
                 </div>
@@ -174,13 +175,13 @@ export default function Home() {
         <div className="container mx-auto max-w-7xl relative z-10 flex flex-col lg:flex-row items-center gap-20">
           <div className="flex-1 text-center lg:text-left reveal-on-scroll">
             <div className="inline-block px-5 py-2 rounded-full bg-white/15 text-white text-[10px] font-black uppercase tracking-[0.3em] mb-8 border border-white/20 italic backdrop-blur-md">
-              On Air • Solid FM 100.9
+              Powered by CoJude • Broadcast by Solid FM
             </div>
             <h2 className="text-6xl font-black text-white italic tracking-tighter sm:text-8xl lg:text-9xl mb-10 leading-[0.85]">
-              The Pitch <br className="hidden sm:block" /> meets the <span className="underline decoration-white/40 underline-offset-8">Wave.</span>
+              The Pitch <br className="hidden sm:block" /> meets the <span className="text-[#FFD700] underline decoration-white/40 underline-offset-8">Brand.</span>
             </h2>
             <p className="text-xl md:text-2xl text-white/95 font-medium leading-relaxed mb-12 max-w-xl mx-auto lg:mx-0">
-              CoJude Solid FM is a broadcast phenomenon. From daily jingles to live matchday interviews, your performance reaches thousands in Enugu.
+              CoJude International and Solid FM bring you a broadcast phenomenon. From daily jingles to live matchday interviews, your performance reaches thousands in Enugu.
             </p>
             <div className="flex flex-wrap justify-center lg:justify-start gap-4">
                <div className="text-white font-black uppercase tracking-[0.2em] text-[10px] border border-white/30 px-6 py-3 rounded-2xl bg-white/5 backdrop-blur-md hover:bg-white/10 transition-all cursor-default">10k+ Listeners</div>
@@ -256,7 +257,7 @@ export default function Home() {
         <div className="container mx-auto max-w-7xl">
           <div className="mb-24 text-center reveal-on-scroll">
             <h2 className="text-sm font-bold uppercase tracking-[0.4em] text-blue-500 mb-6">Elite Competitors</h2>
-            <h3 className="text-6xl font-black text-white italic tracking-tighter sm:text-8xl leading-none uppercase">The Coal City <br /><span className="text-neutral-800">Guard.</span></h3>
+            <h3 className="text-6xl font-black text-white italic tracking-tighter sm:text-8xl leading-none uppercase">The Coal City <br /><span className="text-[#FFD700]">Guard.</span></h3>
           </div>
 
           <div className="grid grid-cols-2 gap-x-8 gap-y-20 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -318,14 +319,28 @@ export default function Home() {
       <section className="border-t border-white/5 bg-black py-40 px-6">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center reveal-on-scroll">
-            <h2 className="mb-20 text-4xl font-extrabold tracking-tight text-white uppercase italic tracking-[0.3em] opacity-30">Strategic Alliance</h2>
-            <div className="flex flex-wrap items-center justify-center gap-10 md:gap-16 opacity-40 grayscale hover:grayscale-0 transition-all duration-700">
-              <div className="text-2xl md:text-3xl font-black tracking-tighter cursor-default">SOLID FM</div>
-              <div className="text-2xl md:text-3xl font-black tracking-tighter cursor-default">COJUDE INT'L</div>
-              <div className="hidden md:block h-6 w-px bg-white/20"></div>
-              <div className="text-[11px] md:text-xs font-black uppercase tracking-[0.4em]">Fintechs</div>
-              <div className="text-[11px] md:text-xs font-black uppercase tracking-[0.4em]">Beverage</div>
-              <div className="text-[11px] md:text-xs font-black uppercase tracking-[0.4em]">Hotels</div>
+            <h2 className="mb-20 text-4xl font-extrabold tracking-tight text-white uppercase italic tracking-[0.3em] opacity-30">Powering the Game</h2>
+            <div className="flex flex-wrap items-center justify-center gap-10 md:gap-16 opacity-80 hover:opacity-100 transition-all duration-700">
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#FFD700] mb-4">Title Sponsor</span>
+                <div className="h-24 w-48 overflow-hidden rounded-2xl bg-white p-2 shadow-2xl flex items-center justify-center transition-transform hover:scale-110">
+                  <img src="/assets/logos/cojude.png" alt="CoJude International" className="object-contain h-full w-full" />
+                </div>
+              </div>
+              <div className="hidden md:block h-24 w-px bg-white/20"></div>
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500 mb-4">Media Partner</span>
+                <div className="h-24 w-24 overflow-hidden rounded-full bg-neutral-200 border-4 border-white shadow-2xl flex items-center justify-center transition-transform hover:scale-110">
+                  <img src="/assets/logos/solidfm.png" alt="Solid FM" className="object-cover h-full w-full" />
+                </div>
+              </div>
+              <div className="hidden md:block h-24 w-px bg-white/20"></div>
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-500 mb-4">Official Association</span>
+                <div className="h-24 w-24 overflow-hidden rounded-full bg-white shadow-2xl flex items-center justify-center transition-transform hover:scale-110">
+                  <img src="/assets/logos/ensfa.png" alt="ENSFA" className="object-contain h-full w-full p-1" />
+                </div>
+              </div>
             </div>
             <p className="mx-auto mt-24 max-w-xl text-xs leading-relaxed text-neutral-600 font-black uppercase tracking-[0.4em] italic">
               Exclusive sponsorship opportunities for visionary brands.
