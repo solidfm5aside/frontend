@@ -42,7 +42,7 @@ export default function Header() {
   ];
 
   return (
-    <header className={`sticky top-0 z-50 w-full transition-all duration-300 ${isScrolled ? 'border-b border-white/10 bg-black/80 py-3 backdrop-blur-xl' : 'bg-transparent py-6'}`}>
+    <header className={`sticky top-0 z-50 w-full transition-all duration-300 ${isScrolled || isMenuOpen ? 'border-b border-white/10 bg-black py-3' : 'bg-transparent py-6'}`}>
       <div className="container mx-auto flex max-w-7xl items-center justify-between px-6">
         
         {/* Logo */}
@@ -120,7 +120,7 @@ export default function Header() {
 
       {/* Mobile Nav Drawer */}
       {isMenuOpen && (
-        <div className="fixed inset-0 top-20 z-40 lg:hidden bg-black/95 backdrop-blur-2xl animate-reveal">
+        <div className="fixed inset-x-0 top-[72px] bottom-0 z-40 lg:hidden bg-black animate-reveal">
           <nav className="container mx-auto px-10 py-16">
             <ul className="flex flex-col gap-10 text-2xl font-black italic uppercase tracking-tighter text-white">
               {navLinks.map((link) => (
