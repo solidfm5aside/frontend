@@ -19,7 +19,7 @@ export default function StandingsPage() {
   }, [activeTab]);
 
   const teams = [
-    { pos: 1, name: 'Coal City SC', p: 6, w: 4, d: 2, l: 0, gd: '+8', pts: 14 },
+    { pos: 1, name: 'Enugu FC', p: 6, w: 4, d: 2, l: 0, gd: '+8', pts: 14 },
     { pos: 2, name: 'Nsukka Rangers', p: 6, w: 4, d: 1, l: 1, gd: '+5', pts: 13 },
     { pos: 3, name: 'Uwani Warriors', p: 6, w: 3, d: 2, l: 1, gd: '+3', pts: 11 },
     { pos: 4, name: 'Agbani Stars', p: 6, w: 3, d: 0, l: 3, gd: '0', pts: 9 },
@@ -28,11 +28,11 @@ export default function StandingsPage() {
   ];
 
   const playerStats = [
-    { pos: 1, name: 'Tunde K.', team: 'Coal City SC', g: 12, a: 4 },
+    { pos: 1, name: 'Tunde K.', team: 'Enugu FC', g: 12, a: 4 },
     { pos: 2, name: 'Emeka R.', team: 'Nsukka Rangers', g: 6, a: 9 },
     { pos: 3, name: 'Chidi O.', team: 'Nsukka Rangers', g: 9, a: 2 },
     { pos: 4, name: 'Ikechukwu P.', team: 'Uwani Warriors', g: 8, a: 3 },
-    { pos: 5, name: 'Obinna V.', team: 'Coal City SC', g: 3, a: 6 },
+    { pos: 5, name: 'Obinna V.', team: 'Enugu FC', g: 3, a: 6 },
     { pos: 6, name: 'Junior E.', team: 'Agbani Stars', g: 6, a: 1 },
     { pos: 7, name: 'Victor D.', team: 'Uwani Warriors', g: 2, a: 5 },
   ].sort((a, b) => (b.g + b.a) - (a.g + a.a));

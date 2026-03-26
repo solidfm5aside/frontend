@@ -71,7 +71,7 @@ export default function RegisterTeamPage() {
             SFM
           </Link>
           <h2 className="text-4xl md:text-6xl font-black italic tracking-tighter text-white uppercase">Register your <span className="text-blue-500 not-italic">Squad.</span></h2>
-          <p className="mt-4 text-xs md:text-sm font-bold text-neutral-500 uppercase tracking-[0.3em]">Join the Coal City 5-A-Side Elite</p>
+          <p className="mt-4 text-xs md:text-sm font-bold text-neutral-500 uppercase tracking-[0.3em]">Join the SolidFM 5-A-Side Elite</p>
         </div>
 
         <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-12 backdrop-blur-3xl shadow-2xl">
@@ -88,7 +88,7 @@ export default function RegisterTeamPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Coal City Stars"
+                  placeholder="e.g. Enugu Stars"
                   className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm md:text-base"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -160,7 +160,7 @@ export default function RegisterTeamPage() {
         </div>
         
         <p className="text-center text-[10px] font-bold text-neutral-600 uppercase tracking-[0.3em] leading-relaxed max-w-lg mx-auto">
-           Registration cost is ₦45,000 per team. By submitting, you agree to the tournament rules and participant code of conduct.
+           Registration cost is ₦50,000 per team. By submitting, you agree to the tournament rules and participant code of conduct.
         </p>
       </div>
     </div>

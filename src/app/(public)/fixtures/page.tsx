@@ -17,7 +17,7 @@ export default function FixturesPage() {
   }, []);
 
   const fixtures = [
-    { id: 1, date: 'Sat, April 4', time: '10:00 AM', teamA: 'Coal City SC', teamB: 'Nsukka Rangers', venue: 'Uwani Stadium', status: 'Upcoming' },
+    { id: 1, date: 'Sat, April 4', time: '10:00 AM', teamA: 'Enugu FC', teamB: 'Nsukka Rangers', venue: 'Uwani Stadium', status: 'Upcoming' },
     { id: 2, date: 'Sat, April 4', time: '12:00 PM', teamA: 'Uwani Warriors', teamB: 'Agbani Stars', venue: 'Uwani Stadium', status: 'Upcoming' },
     { id: 3, date: 'Sun, April 5', time: '10:00 AM', teamA: 'Trans Ekulu FC', teamB: 'New Haven', venue: 'Sports Center', status: 'Upcoming' },
     { id: 4, date: 'Sun, April 5', time: '02:00 PM', teamA: 'Abakpa United', teamB: 'Ind. Layout', venue: 'Sports Center', status: 'Upcoming' },
@@ -31,7 +31,7 @@ export default function FixturesPage() {
         <div className="container mx-auto max-w-7xl relative z-10 text-center animate-reveal">
            <h1 className="text-[10px] md:text-sm font-bold uppercase tracking-[0.5em] text-blue-500 mb-6">Tournament Hub</h1>
            <h2 className="text-4xl font-black italic tracking-tighter uppercase sm:text-8xl lg:text-9xl mb-8 leading-tight">Match <span className="text-neutral-800">Days.</span></h2>
-           <p className="max-w-xl mx-auto text-sm md:text-lg text-neutral-400 font-medium">Every clash in the Coal City. Tracking the ₦500k hunt.</p>
+           <p className="max-w-xl mx-auto text-sm md:text-lg text-neutral-400 font-medium">Every clash in Enugu. Tracking the hunt for glory.</p>
         </div>
       </section>
 

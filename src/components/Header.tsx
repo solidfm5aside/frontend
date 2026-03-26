@@ -39,6 +39,7 @@ export default function Header() {
     { name: 'About', href: '/#vision' },
     { name: 'Fixtures', href: '/fixtures' },
     { name: 'Standings', href: '/standings' },
+    { name: 'Gallery', href: '/gallery' },
   ];
 
   return (
