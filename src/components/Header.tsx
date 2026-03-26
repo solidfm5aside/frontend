@@ -124,13 +124,35 @@ export default function Header() {
         <div className="fixed inset-x-0 top-[72px] bottom-0 z-40 lg:hidden bg-black animate-reveal">
           <nav className="container mx-auto px-10 py-16">
             <ul className="flex flex-col gap-10 text-2xl font-black italic uppercase tracking-tighter text-white">
-              {navLinks.map((link) => (
-                <li key={link.name}>
-                  <Link href={link.href} onClick={() => { toggleMenu(); setActiveHash(link.href.includes('#') ? '#' + link.href.split('#')[1] : ''); }} className="hover:text-blue-500 transition-colors">
-                    {link.name}
-                  </Link>
-                </li>
-              ))}
+              {navLinks.map((link) => {
+                const linkBase = link.href.split('#')[0];
+                const linkHash = link.href.includes('#') ? '#' + link.href.split('#')[1] : '';
+                
+                let isActive = false;
+                if (link.href === '/') {
+                  isActive = pathname === '/' && !activeHash;
+                } else if (linkHash) {
+                  isActive = pathname === linkBase && activeHash === linkHash;
+                } else {
+                  isActive = pathname.startsWith(linkBase) && pathname !== '/';
+                }
+
+                return (
+                  <li key={link.name}>
+                    <Link 
+                      href={link.href} 
+                      onClick={() => { 
+                        toggleMenu(); 
+                        setActiveHash(linkHash); 
+                      }} 
+                      className={`transition-colors flex items-center gap-4 ${isActive ? 'text-[#FFD700]' : 'hover:text-white/60'}`}
+                    >
+                      {isActive && <span className="h-2 w-2 rounded-full bg-[#FFD700] animate-pulse"></span>}
+                      {link.name}
+                    </Link>
+                  </li>
+                );
+              })}
               <li className="pt-10 border-t border-white/10">
                 <Link href="/register-team" onClick={toggleMenu} className="text-blue-500">Register Your Team</Link>
               </li>

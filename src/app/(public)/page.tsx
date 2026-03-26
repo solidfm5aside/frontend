@@ -264,9 +264,9 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 reveal-on-scroll">
-            {/* Main Featured Action Shot */}
-            <div className="lg:col-span-2 lg:row-span-2 relative group overflow-hidden rounded-[40px] border border-white/10 bg-neutral-900 aspect-square md:aspect-auto h-full min-h-[400px]">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 reveal-on-scroll">
+            {/* Main Featured Action Shot (Full width on mobile, 2 cols on LG) */}
+            <div className="col-span-2 lg:row-span-2 relative group overflow-hidden rounded-[30px] md:rounded-[40px] border border-white/10 bg-neutral-900 aspect-square md:aspect-auto h-full min-h-[300px] lg:min-h-[400px]">
               {randomLegacy[0] && (
                 <Image 
                   src={`/assets/last-edition/${randomLegacy[0]}`}
@@ -276,14 +276,14 @@ export default function Home() {
                 />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
-              <div className="absolute bottom-10 left-10">
-                <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-xs mb-3 block">Pure Intensity</span>
-                <h4 className="text-white text-3xl font-black italic uppercase tracking-tighter">The Look of a Champion</h4>
+              <div className="absolute bottom-6 md:bottom-10 left-6 md:left-10">
+                <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-[10px] md:text-xs mb-2 md:mb-3 block">Pure Intensity</span>
+                <h4 className="text-white text-xl md:text-3xl font-black italic uppercase tracking-tighter">The Look of a Champion</h4>
               </div>
             </div>
 
-            {/* Victory / Awards */}
-            <div className="relative group overflow-hidden rounded-[30px] border border-white/10 bg-neutral-900 aspect-square">
+            {/* Victory / Awards (1 column on mobile, 1 column on LG) */}
+            <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
               {randomLegacy[1] && (
                 <Image 
                   src={`/assets/last-edition/${randomLegacy[1]}`}
@@ -293,13 +293,13 @@ export default function Home() {
                 />
               )}
               <div className="absolute inset-0 bg-black/40 group-hover:bg-blue-600/20 transition-all"></div>
-              <div className="absolute bottom-6 left-6">
-                <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-[8px] bg-black/60 px-2 py-1 rounded">Edition 2.0 Finals</span>
+              <div className="absolute bottom-4 left-4">
+                <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-[6px] md:text-[8px] bg-black/60 px-2 py-1 rounded">Edition 2.0 Finals</span>
               </div>
             </div>
 
-            {/* Bench / Emotions */}
-            <div className="relative group overflow-hidden rounded-[30px] border border-white/10 bg-neutral-900 aspect-square">
+            {/* Bench / Emotions (1 column on mobile, 1 column on LG) */}
+            <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
               {randomLegacy[2] && (
                 <Image 
                   src={`/assets/last-edition/${randomLegacy[2]}`}
@@ -311,8 +311,8 @@ export default function Home() {
               <div className="absolute inset-0 bg-black/40 group-hover:bg-blue-600/20 transition-all"></div>
             </div>
 
-            {/* Team Shot */}
-            <div className="lg:col-span-2 relative group overflow-hidden rounded-[40px] border border-white/10 bg-neutral-900 aspect-[16/9] md:aspect-auto h-[300px]">
+            {/* Team Shot (Full width on mobile, 2 columns on LG) */}
+            <div className="col-span-2 relative group overflow-hidden rounded-[30px] md:rounded-[40px] border border-white/10 bg-neutral-900 aspect-[2/1] md:aspect-auto md:h-[300px] lg:h-[350px]">
               {randomLegacy[3] && (
                 <Image 
                   src={`/assets/last-edition/${randomLegacy[3]}`}
