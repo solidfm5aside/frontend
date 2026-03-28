@@ -20,13 +20,20 @@ export default function TeamsManagementPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'registered'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    pages: 1,
+    limit: 10
+  });
 
-  const fetchTeams = async () => {
+  const fetchTeams = async (page = 1, currentFilter = filter) => {
     setIsLoading(true);
     try {
-      const response: any = await apiClient.get('/teams');
+      const response: any = await apiClient.get(`/teams?page=${page}&limit=10&registrationStatus=${currentFilter}`);
       if (response.success) {
         setTeams(response.data);
+        setPagination(response.pagination);
       }
     } catch (error) {
       console.error('Failed to fetch teams:', error);
@@ -36,8 +43,8 @@ export default function TeamsManagementPage() {
   };
 
   useEffect(() => {
-    fetchTeams();
-  }, []);
+    fetchTeams(currentPage, filter);
+  }, [currentPage, filter]);
 
   const handleStatusUpdate = async (id: string, status: string) => {
     try {
@@ -51,10 +58,10 @@ export default function TeamsManagementPage() {
     }
   };
 
-  const filteredTeams = teams.filter(t => {
-    if (filter === 'all') return true;
-    return t.registrationStatus === filter;
-  });
+  const handleFilterChange = (newFilter: 'all' | 'pending' | 'registered') => {
+    setFilter(newFilter);
+    setCurrentPage(1); // Reset to first page on filter change
+  };
 
   if (isLoading) {
     return (
@@ -73,17 +80,17 @@ export default function TeamsManagementPage() {
         </div>
         
         <div className="flex gap-2 p-1.5 rounded-2xl bg-white/[0.02] border border-white/5">
-           {['all', 'pending', 'registered'].map((f) => (
-             <button
-               key={f}
-               onClick={() => setFilter(f as any)}
-               className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                 filter === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'
-               }`}
-             >
-               {f}
-             </button>
-           ))}
+            {['all', 'pending', 'registered'].map((f) => (
+              <button
+                key={f}
+                onClick={() => handleFilterChange(f as any)}
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  filter === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -99,7 +106,7 @@ export default function TeamsManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredTeams.length > 0 ? filteredTeams.map((team) => (
+              {teams.length > 0 ? teams.map((team) => (
                 <tr key={team._id} className="hover:bg-white/[0.02] transition-colors group">
                   <td className="px-8 py-8">
                     <div className="flex items-center gap-4">
@@ -178,6 +185,45 @@ export default function TeamsManagementPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="px-8 py-6 border-t border-white/5 bg-white/[0.02] flex flex-col sm:flex-row items-center justify-between gap-4">
+           <div className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">
+              Showing <span className="text-white">{(currentPage - 1) * pagination.limit + 1}-{Math.min(currentPage * pagination.limit, pagination.total)}</span> of <span className="text-white">{pagination.total}</span> teams
+           </div>
+           
+           <div className="flex items-center gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                className="px-4 py-2 rounded-xl border border-white/5 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white disabled:opacity-30 disabled:hover:text-neutral-500 transition-all cursor-pointer disabled:cursor-not-allowed"
+              >
+                Prev
+              </button>
+              
+              <div className="flex items-center gap-1">
+                 {Array.from({ length: pagination.pages }, (_, i) => i + 1).map((p) => (
+                   <button
+                     key={p}
+                     onClick={() => setCurrentPage(p)}
+                     className={`h-8 w-8 rounded-lg text-[10px] font-black transition-all cursor-pointer ${
+                       currentPage === p ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'
+                     }`}
+                   >
+                     {p}
+                   </button>
+                 ))}
+              </div>
+
+              <button
+                disabled={currentPage === pagination.pages}
+                onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
+                className="px-4 py-2 rounded-xl border border-white/5 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white disabled:opacity-30 disabled:hover:text-neutral-500 transition-all cursor-pointer disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+           </div>
         </div>
       </div>
       

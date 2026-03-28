@@ -10,14 +10,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     setIsHydrated(true);
   }, []);
 
+  // Close sidebar when route changes on mobile
   useEffect(() => {
-    if (isHydrated && !admin) {
-      router.push('/login');
+    setIsSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      if (!admin) {
+        router.push('/login');
+      } else if (admin.role !== 'admin' && admin.role !== 'super_admin') {
+        // Logged in but not an admin (e.g., viewer)
+        router.push('/');
+      }
     }
   }, [isHydrated, admin, router]);
 
@@ -31,8 +42,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navLinks = [
     { name: 'Overview', href: '/admin/dashboard', icon: '📊' },
+    { name: 'Tournaments', href: '/admin/tournaments', icon: '🏆' },
     { name: 'Teams', href: '/admin/teams', icon: '🛡️' },
     { name: 'Players', href: '/admin/players', icon: '👥' },
+    { name: 'Venues', href: '/admin/venues', icon: '📍' },
     { name: 'Matches', href: '/admin/matches', icon: '⚽' },
   ];
 
@@ -43,8 +56,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-screen bg-[#050505] font-outfit text-white">
+      {/* Mobile Backdrop */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 z-50 h-screen w-64 border-r border-white/5 bg-black/40 backdrop-blur-3xl lg:static lg:block hidden">
+      <aside className={`fixed left-0 top-0 z-50 h-screen w-64 border-r border-white/5 bg-black/40 backdrop-blur-3xl transition-transform duration-300 lg:static lg:translate-x-0 ${
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
         <div className="flex h-screen flex-col overflow-hidden">
           {/* Logo Section - Fixed */}
           <div className="p-8 pb-12">
@@ -70,6 +93,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20'
                       : 'text-neutral-500 hover:bg-white/5 hover:text-white'
                   }`}
+                  onClick={() => setIsSidebarOpen(false)}
                 >
                   <span className="text-lg">{link.icon}</span>
                   {link.name}
@@ -107,7 +131,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-black text-white">S</div>
               <span className="text-xs font-black uppercase tracking-widest">Admin Portal</span>
             </div>
-            {/* Mobile menu could go here, but for now we focus on the core layout */}
+            
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-95"
+            >
+              <span className="text-xl">☰</span>
+            </button>
         </header>
 
         <div className="p-6 md:p-10 lg:p-16 max-w-7xl mx-auto">

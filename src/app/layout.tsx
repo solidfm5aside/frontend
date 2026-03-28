@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark scroll-smooth">
+    <html lang="en" className="dark scroll-smooth" data-scroll-behavior="smooth">
       <body className={`${inter.variable} ${outfit.variable} font-sans min-h-screen bg-black text-neutral-50 antialiased`}>
         <Toaster theme="dark" position="bottom-right" richColors />
         {children}

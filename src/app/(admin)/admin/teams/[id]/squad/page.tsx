@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import apiClient from '@/lib/api-client';
+import { useAuthStore } from '@/store/use-auth-store';
 import { toast } from 'sonner';
 import { 
   Users, 
@@ -11,7 +12,8 @@ import {
   Shield, 
   Activity, 
   ArrowLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -31,10 +33,13 @@ interface Team {
 
 export default function SquadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { admin } = useAuthStore();
+  const isSuperAdmin = admin?.role === 'super_admin';
   const [team, setTeam] = useState<Team | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [hasActiveTournament, setHasActiveTournament] = useState(false);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -43,6 +48,24 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
     jerseyNumber: '',
     nationality: 'Nigeria'
   });
+  const [passportFile, setPassportFile] = useState<File | null>(null);
+  const [passportPreview, setPassportPreview] = useState<string | null>(null);
+
+  const handlePassportChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) {
+        toast.error('Passport must be smaller than 1MB');
+        return;
+      }
+      setPassportFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPassportPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -62,20 +85,38 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     fetchData();
+    // Check if registration is open (there's an active/upcoming tournament)
+    apiClient.get('/tournaments').then((res: any) => {
+      if (res.success) {
+        const active = res.data.some((t: any) => t.status === 'upcoming' || t.status === 'ongoing');
+        setHasActiveTournament(active);
+      }
+    }).catch(() => {});
   }, [id]);
 
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdding(true);
     try {
-      const response: any = await apiClient.post('/players', {
-        ...formData,
-        teamId: id,
-        jerseyNumber: Number(formData.jerseyNumber)
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('position', formData.position);
+      data.append('jerseyNumber', formData.jerseyNumber.toString());
+      data.append('nationality', formData.nationality);
+      data.append('teamId', id);
+      if (passportFile) {
+        data.append('passportPic', passportFile);
+      }
+
+      const response: any = await apiClient.post('/players', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
+      
       if (response.success) {
         toast.success('Player added to squad');
         setFormData({ name: '', position: 'MF', jerseyNumber: '', nationality: 'Nigeria' });
+        setPassportFile(null);
+        setPassportPreview(null);
         fetchData();
       }
     } catch (error: any) {
@@ -131,16 +172,63 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Registration Form */}
+        {/* Add Player Form OR Locked Notice */}
         <div className="lg:col-span-1 border border-white/5 bg-white/[0.02] rounded-[40px] p-8 backdrop-blur-3xl h-fit">
           <div className="flex items-center gap-4 mb-8">
-            <div className="h-10 w-10 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500">
+            <div className={`h-10 w-10 rounded-2xl flex items-center justify-center ${hasActiveTournament ? 'bg-blue-600/10 text-blue-500' : 'bg-neutral-800 text-neutral-500'}`}>
               <UserPlus className="h-5 w-5" />
             </div>
             <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">Add Player</h2>
           </div>
 
+          {/* Super admins can always add. Regular admins only when a tournament is active. */}
+          {!hasActiveTournament && !isSuperAdmin ? (
+            <div className="flex flex-col items-center text-center gap-4 py-6">
+              <div className="h-16 w-16 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500 text-2xl">🔒</div>
+              <div>
+                <p className="font-bold text-neutral-300 text-sm">Registration Locked</p>
+                <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest mt-2 leading-relaxed">
+                  No active or upcoming tournament. Initialize a season from the Tournaments page first.
+                </p>
+              </div>
+            </div>
+          ) : (
+
           <form onSubmit={handleAddPlayer} className="space-y-6">
+            <div className="flex justify-center mb-6">
+              <div className="relative group">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePassportChange}
+                  className="hidden"
+                  id="passport-upload"
+                />
+                <label 
+                  htmlFor="passport-upload"
+                  className="flex h-24 w-24 cursor-pointer items-center justify-center rounded-[24px] border border-dashed border-white/20 bg-white/5 transition-all hover:border-blue-500/50 hover:bg-white/10 overflow-hidden relative"
+                >
+                  {passportPreview ? (
+                    <img src={passportPreview} alt="Passport Preview" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-2xl text-neutral-600 group-hover:text-blue-500 transition-colors">+</div>
+                      <div className="text-[7px] font-black uppercase tracking-widest text-neutral-600 group-hover:text-neutral-400 mt-1">Photo</div>
+                    </div>
+                  )}
+                </label>
+                {passportPreview && (
+                  <button 
+                    type="button"
+                    onClick={() => { setPassportPreview(null); setPassportFile(null); }}
+                    className="absolute -top-2 -right-2 h-6 w-6 text-xs rounded-full bg-red-500 text-white font-bold flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg scale-0 group-hover:scale-100 duration-300"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Full Name</label>
               <input 
@@ -155,16 +243,20 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Position</label>
-                <select 
-                  className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all appearance-none"
-                  value={formData.position}
-                  onChange={e => setFormData({...formData, position: e.target.value})}
-                >
-                  <option value="GK">GK</option>
-                  <option value="DF">DF</option>
-                  <option value="MF">MF</option>
-                  <option value="FW">FW</option>
-                </select>
+                <div className="relative group">
+                  <select 
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all appearance-none pr-12 relative z-10"
+                    style={{ colorScheme: 'dark' }}
+                    value={formData.position}
+                    onChange={e => setFormData({...formData, position: e.target.value})}
+                  >
+                    <option value="GK" className="bg-[#0a0a0a] text-white">GK</option>
+                    <option value="DF" className="bg-[#0a0a0a] text-white">DF</option>
+                    <option value="MF" className="bg-[#0a0a0a] text-white">MF</option>
+                    <option value="FW" className="bg-[#0a0a0a] text-white">FW</option>
+                  </select>
+                  <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500 group-focus-within:text-blue-500 transition-colors pointer-events-none z-20" />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Jersey #</label>
@@ -187,6 +279,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
               {adding ? 'Processing...' : 'Register Player'}
             </button>
           </form>
+          )}
         </div>
 
         {/* Squad Table */}

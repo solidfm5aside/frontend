@@ -3,52 +3,56 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from "next/image";
 import Link from "next/link";
+import apiClient from '@/lib/api-client';
 
-const legacyImages = [
-  "BQ3A5250.MOV.06_57_37_19.Still001.jpg.jpeg",
-  "BQ3A5250.MOV.06_58_33_21.Still002.jpg.jpeg",
-  "BQ3A5274.MOV.06_59_44_12.Still001.jpg.jpeg",
-  "BQ3A5274.MOV.06_59_59_19.Still002.jpg.jpeg",
-  "BQ3A5276.MOV.07_00_18_16.Still001.jpg.jpeg",
-  "BQ3A5277.MOV.07_00_25_27.Still001.jpg.jpeg",
-  "BQ3A5280.MOV.07_00_52_01.Still001.jpg.jpeg",
-  "BQ3A5281.MOV.07_01_01_23.Still001.jpg.jpeg",
-  "BQ3A5282.MOV.07_01_11_21.Still001.jpg.jpeg",
-  "BQ3A5283.MOV.07_01_25_10.Still001.jpg.jpeg",
-  "BQ3A5285.MOV.07_01_35_06.Still001.jpg.jpeg",
-  "BQ3A5288.MOV.07_02_15_08.Still001.jpg.jpeg",
-  "BQ3A5292.MOV.07_03_24_04.Still001.jpg.jpeg",
-  "BQ3A5304.MOV.07_04_07_05.Still001.jpg.jpeg",
-  "BQ3A5318.MOV.07_06_32_02.Still001.jpg.jpeg",
-  "BQ3A5348.MOV.07_11_43_00.Still001.jpg.jpeg",
-  "BQ3A5351.MOV.07_12_00_28.Still001.jpg.jpeg",
-  "BQ3A5352.MOV.07_12_11_05.Still001.jpg.jpeg",
-  "BQ3A5353.MOV.07_12_18_07.Still001.jpg.jpeg",
-  "BQ3A5355.MOV.07_12_31_24.Still001.jpg.jpeg",
-  "BQ3A5376.MOV.07_17_22_10.Still001.jpg.jpeg",
-  "BQ3A5406.MOV.07_23_16_25.Still001.jpg.jpeg",
-  "BQ3A5466.MOV.07_27_10_01.Still001.jpg.jpeg",
-  "BQ3A5468.MOV.07_27_25_12.Still001.jpg.jpeg",
-  "BQ3A5473.MOV.07_30_05_12.Still001.jpg.jpeg",
-  "BQ3A5475.MOV.07_33_55_10.Still001.jpg.jpeg",
-  "BQ3A5478.MOV.07_35_13_00.Still001.jpg.jpeg",
-  "BQ3A5483.MOV.07_37_14_14.Still002.jpg.jpeg",
-  "BQ3A5484.MOV.07_37_29_27.Still001.jpg.jpeg",
-  "BQ3A5492.MOV.07_37_50_17.Still001.jpg.jpeg",
-  "BQ3A5494.MOV.07_39_29_10.Still001.jpg.jpeg",
-  "BQ3A5496.MOV.07_40_50_03.Still001.jpg.jpeg",
-  "BQ3A5497.MOV.07_41_05_15.Still001.jpg.jpeg",
-  "BQ3A5497.MOV.07_41_28_26.Still002.jpg.jpeg",
+const firstEditionImages = [
+  "first01.jpeg", "first02.jpeg", "first03.jpeg", "first04.jpeg", "first05.jpeg",
+  "first06.jpeg", "first07.jpeg", "first08.jpeg", "first09.jpeg"
+];
+
+const secondEditionImages = [
+  "second01.jpeg",
+  "second02.jpeg",
+  "second03.jpeg",
+  "second04.jpeg",
+  "second05.jpeg",
+  "second06.jpeg",
+  "second07.jpeg",
+  "second08.jpeg",
+  "second09.jpeg",
+  "second10.jpeg",
+  "second11.jpeg",
+  "second12.jpeg"
+];
+
+// Combine with metadata
+const allLegacyImages = [
+  ...firstEditionImages.map(img => ({ name: img, edition: 'Edition 1.0', path: `/assets/editions/first/${img}` })),
+  ...secondEditionImages.map(img => ({ name: img, edition: 'Edition 2.0', path: `/assets/editions/second/${img}` }))
 ];
 
 export default function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [randomLegacy, setRandomLegacy] = useState<string[]>([]);
+  const [randomLegacy, setRandomLegacy] = useState<typeof allLegacyImages>([]);
+  const [archive, setArchive] = useState<any[]>([]);
 
   useEffect(() => {
-    // Pick 4 unique random images
-    const shuffled = [...legacyImages].sort(() => 0.5 - Math.random());
-    setRandomLegacy(shuffled.slice(0, 4));
+    // Shuffle allLegacyImages and pick first 6 for fallback
+    const shuffled = [...allLegacyImages].sort(() => 0.5 - Math.random());
+    setRandomLegacy(shuffled.slice(0, 6));
+
+    // Fetch dynamic archive
+    const fetchArchive = async () => {
+       try {
+         const response: any = await apiClient.get('/tournaments/archive');
+         if (response.success) {
+            setArchive(response.data);
+         }
+       } catch (error) {
+         console.error('Failed to fetch archive:', error);
+       }
+    };
+    fetchArchive();
   }, []);
 
   useEffect(() => {
@@ -72,6 +76,20 @@ export default function Home() {
     return () => observer.disconnect();
   }, []);
 
+  const [currentHero, setCurrentHero] = useState(0);
+  const heroImages = [
+    "/assets/editions/second/second01.jpeg",
+    "/assets/editions/first/first05.jpeg",
+    "/assets/editions/first/first07.jpeg"
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentHero((prev) => (prev + 1) % heroImages.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <div className="flex flex-col font-outfit relative overflow-hidden selection:bg-blue-600/30">
       {/* Subtle Texture Overlay */}
@@ -80,25 +98,47 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-black px-6 pt-24 pb-12">
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black"></div>
-          {/* Enugu high-energy image */}
-          <div className="absolute inset-0 bg-[url('/hero-enugu.png')] bg-cover bg-center opacity-70 mix-blend-overlay scale-110 animate-[pulse_10s_ease-in-out_infinite]"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black z-20"></div>
+          
+          {/* Dynamic Carousel Background */}
+          {heroImages.map((src, idx) => (
+            <div 
+              key={idx}
+              className={`absolute inset-0 transition-opacity duration-[2000ms] ease-in-out ${
+                currentHero === idx ? 'opacity-70 scale-100' : 'opacity-0 scale-110'
+              }`}
+            >
+              <Image 
+                src={src}
+                alt={`Hero Slide ${idx + 1}`}
+                fill
+                priority={idx === 0}
+                className="object-cover object-center mix-blend-overlay"
+              />
+            </div>
+          ))}
+          
+          {/* Global Hero Grain/Overlay */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10"></div>
         </div>
 
         <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] w-full max-w-7xl">
           <div className="flex-1 flex flex-col items-center justify-center text-center animate-reveal py-20">
-            <div className="mb-14 inline-flex items-center gap-4 rounded-full border border-blue-500/30 bg-blue-500/10 px-8 py-3.5 backdrop-blur-xl shadow-[0_0_40px_rgba(59,130,246,0.15)] group transition-all hover:scale-105 hover:bg-blue-500/20">
+            <div className="mb-14 inline-flex items-center gap-4 rounded-full border border-blue-500/50 bg-blue-500/10 px-8 py-3.5 backdrop-blur-xl shadow-[0_0_50px_rgba(59,130,246,0.25)] group transition-all hover:scale-105 hover:bg-blue-500/20 active:scale-95">
               <div className="flex h-3 w-3 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500 ring-4 ring-blue-500/20"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500 ring-4 ring-blue-500/30"></span>
               </div>
-              <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.4em] text-blue-400 group-hover:text-blue-100 transition-colors">
-                Registration for <span className="text-white">2026 Season</span> is Now <span className="text-[#FFD700]">Live</span>
+              <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.4em] text-blue-400 group-hover:text-blue-200 transition-colors drop-shadow-lg">
+                REGISTRATION FOR <span className="text-white">2026 SEASON</span> IS NOW <span className="text-[#FFD700] animate-pulse drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">LIVE</span>
               </span>
             </div>
             
-            <h1 className="mb-8 font-outfit text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-8xl leading-[0.95] perspective-1000 uppercase">
-              Solid FM <br />
+            <h1 className="mb-8 font-outfit text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-8xl leading-[0.95] perspective-1000 uppercase text-center">
+              Solid <span className="relative inline-block">
+                FM
+                <span className="absolute -top-4 md:-top-7 left-0 md:left-1 w-full text-center text-[#FFD700] text-[8px] md:text-xs font-black uppercase tracking-[0.4em] drop-shadow-[0_0_10px_rgba(255,215,0,0.3)] animate-reveal delay-300 pointer-events-none whitespace-nowrap">CoJude</span>
+              </span> <br />
               <span className="text-[#FFD700] drop-shadow-[0_0_40px_rgba(255,215,0,0.4)]">5-Aside</span> <br />
               <span className="text-white text-4xl sm:text-6xl lg:text-7xl">Football</span>
             </h1>
@@ -239,8 +279,9 @@ export default function Home() {
                    { t: "Economic Opportunities", d: "Organizing such tournaments stimulates local economies by creating jobs related to event planning, coaching, refereeing, and venue management, prioritizing brand partnership." },
                    { t: "Talent Identification", d: "Tournaments serve as platforms to scout and nurture emerging football talents, potentially leading to professional careers for exceptional players." },
                    { t: "Community Engagement", d: "Such events unite communities, fostering a sense of pride and collective identity. They promote social cohesion and provide constructive activities." },
+                   { t: "Brand Visibility", d: "SolidFM Five-Aside provides a high-impact platform for brands to showcase their products and services to a captive, high-energy audience, creating deep community connections." },
                  ].map((benefit, idx) => (
-                   <div key={idx} className="bg-neutral-900/50 border border-white/5 p-6 rounded-3xl hover:border-blue-500/30 transition-colors group">
+                   <div key={idx} className={`bg-neutral-900/50 border border-white/5 p-6 rounded-3xl hover:border-blue-500/30 transition-colors group ${idx === 6 ? 'sm:col-span-2' : ''}`}>
                      <h5 className="text-[#FFD700] font-bold text-lg mb-3 italic tracking-tight group-hover:text-white transition-colors">{benefit.t}</h5>
                      <p className="text-neutral-400 text-sm leading-relaxed">{benefit.d}</p>
                    </div>
@@ -264,69 +305,146 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 reveal-on-scroll">
-            {/* Main Featured Action Shot (Full width on mobile, 2 cols on LG) */}
-            <div className="col-span-2 lg:row-span-2 relative group overflow-hidden rounded-[30px] md:rounded-[40px] border border-white/10 bg-neutral-900 aspect-square md:aspect-auto h-full min-h-[300px] lg:min-h-[400px]">
-              {randomLegacy[0] && (
-                <Image 
-                  src={`/assets/last-edition/${randomLegacy[0]}`}
-                  alt="Intense Focus" 
-                  fill 
-                  className="object-cover transition-all duration-700 group-hover:scale-110 group-hover:rotate-2"
-                />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
-              <div className="absolute bottom-6 md:bottom-10 left-6 md:left-10">
-                <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-[10px] md:text-xs mb-2 md:mb-3 block">Pure Intensity</span>
-                <h4 className="text-white text-xl md:text-3xl font-black italic uppercase tracking-tighter">The Look of a Champion</h4>
+          {archive.length > 0 ? (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-on-scroll mt-10">
+               {archive.map((tourney) => (
+                 <div key={tourney._id} className="group relative overflow-hidden rounded-[30px] border border-white/5 bg-white/[0.02] p-8 aspect-[4/3] flex flex-col justify-between hover:bg-white/[0.04] hover:border-blue-500/30 transition-all shadow-2xl">
+                    <div className="flex justify-between items-start relative z-10">
+                       <div>
+                          <h4 className="text-2xl font-black italic text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors">{tourney.name}</h4>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#FFD700]">Season {tourney.season}</span>
+                       </div>
+                       <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">🏆</div>
+                    </div>
+                    
+                    <div className="relative z-10 mt-8 border-t border-white/5 pt-6">
+                       <p className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 italic">Defending Champions</p>
+                       {tourney.champion ? (
+                         <div className="flex items-center gap-4">
+                           <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-white text-base">
+                             {tourney.champion.name.charAt(0)}
+                           </div>
+                           <div>
+                             <span className="text-xl font-bold text-white tracking-tight block leading-none mb-1">{tourney.champion.name}</span>
+                             <span className="text-[10px] uppercase font-black tracking-widest text-neutral-500">{tourney.champion.city}</span>
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="flex items-center gap-3">
+                           <div className="h-10 w-10 flex-shrink-0 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-neutral-600 font-bold">?</div>
+                           <span className="text-xs font-black uppercase tracking-widest text-neutral-600 italic">No Historical Data</span>
+                         </div>
+                       )}
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-blue-900/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-0 pointer-events-none"></div>
+                 </div>
+               ))}
+             </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 reveal-on-scroll">
+              {/* 1. Main Focal (2x2 area on desktop) */}
+              <div className="col-span-2 lg:row-span-2 relative group overflow-hidden rounded-[30px] md:rounded-[40px] border border-white/10 bg-neutral-900 aspect-video lg:aspect-auto">
+                {randomLegacy[0] && (
+                  <Image 
+                    src={randomLegacy[0].path}
+                    alt="Legacy Focal" 
+                    fill 
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-cover transition-all duration-700 lg:group-hover:scale-110 lg:group-hover:rotate-1"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity"></div>
+                <div className="absolute bottom-6 md:bottom-10 left-6 md:left-10">
+                  <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-[10px] md:text-xs px-3 py-1 bg-black/40 backdrop-blur-md rounded-lg border border-white/10">{randomLegacy[0]?.edition}</span>
+                </div>
+              </div>
+
+              {/* 2. Top Right Thumb */}
+              <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
+                {randomLegacy[1] && (
+                  <Image 
+                    src={randomLegacy[1].path}
+                    alt="Legacy Capture" 
+                    fill 
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-all duration-700 lg:group-hover:scale-110"
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/40 lg:group-hover:bg-blue-600/10 transition-all"></div>
+                <div className="absolute bottom-4 left-4">
+                  <span className="text-blue-500 font-black uppercase tracking-[0.2em] text-[8px] bg-black/60 backdrop-blur-md px-2 py-1 rounded-md border border-white/5">{randomLegacy[1]?.edition}</span>
+                </div>
+              </div>
+
+              {/* 3. Top Far Right Thumb */}
+              <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
+                {randomLegacy[2] && (
+                  <Image 
+                    src={randomLegacy[2].path}
+                    alt="Legacy Experience" 
+                    fill 
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-all duration-700 lg:group-hover:scale-110"
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/40 lg:group-hover:bg-blue-600/10 transition-all"></div>
+                <div className="absolute bottom-4 left-4">
+                  <span className="text-blue-500 font-black uppercase tracking-[0.2em] text-[8px] bg-black/60 backdrop-blur-md px-2 py-1 rounded-md border border-white/5">{randomLegacy[2]?.edition}</span>
+                </div>
+              </div>
+
+              {/* 4. Middle Right Thumb */}
+              <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
+                {randomLegacy[4] && (
+                  <Image 
+                    src={randomLegacy[4].path}
+                    alt="Legacy Highlight" 
+                    fill 
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-all duration-700 lg:group-hover:scale-110"
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/40 lg:group-hover:bg-blue-600/10 transition-all"></div>
+                <div className="absolute bottom-4 left-4">
+                  <span className="text-blue-500 font-black uppercase tracking-[0.2em] text-[8px] bg-black/60 backdrop-blur-md px-2 py-1 rounded-md border border-white/5">{randomLegacy[4]?.edition}</span>
+                </div>
+              </div>
+
+              {/* 5. Middle Far Right Thumb */}
+              <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
+                {randomLegacy[5] && (
+                  <Image 
+                    src={randomLegacy[5].path}
+                    alt="Legacy Moment" 
+                    fill 
+                    sizes="(max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-all duration-700 lg:group-hover:scale-110"
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/40 lg:group-hover:bg-blue-600/10 transition-all"></div>
+                <div className="absolute bottom-4 left-4">
+                  <span className="text-blue-500 font-black uppercase tracking-[0.2em] text-[8px] bg-black/60 backdrop-blur-md px-2 py-1 rounded-md border border-white/5">{randomLegacy[5]?.edition}</span>
+                </div>
+              </div>
+
+              {/* 6. Bottom Complementary Wide Shot (col-span-2) */}
+              <div className="col-span-2 relative group overflow-hidden rounded-[30px] md:rounded-[40px] border border-white/10 bg-neutral-900 aspect-video lg:aspect-auto">
+                {randomLegacy[3] && (
+                  <Image 
+                    src={randomLegacy[3].path}
+                    alt="Legacy Team" 
+                    fill 
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-cover transition-all duration-700 lg:group-hover:scale-110 lg:group-hover:rotate-1"
+                  />
+                )}
+                <div className="absolute inset-0 bg-black/40 lg:group-hover:bg-black/20 transition-all"></div>
+                <div className="absolute bottom-6 left-8">
+                  <span className="text-white/80 font-black uppercase tracking-[0.3em] text-[9px] md:text-[10px] px-3 py-1 bg-blue-600/40 backdrop-blur-md rounded-lg border border-white/10">{randomLegacy[3]?.edition} Summary</span>
+                </div>
               </div>
             </div>
-
-            {/* Victory / Awards (1 column on mobile, 1 column on LG) */}
-            <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
-              {randomLegacy[1] && (
-                <Image 
-                  src={`/assets/last-edition/${randomLegacy[1]}`}
-                  alt="Victory Awards" 
-                  fill 
-                  className="object-cover transition-all duration-700 group-hover:scale-110"
-                />
-              )}
-              <div className="absolute inset-0 bg-black/40 group-hover:bg-blue-600/20 transition-all"></div>
-              <div className="absolute bottom-4 left-4">
-                <span className="text-blue-500 font-black uppercase tracking-[0.3em] text-[6px] md:text-[8px] bg-black/60 px-2 py-1 rounded">Edition 2.0 Finals</span>
-              </div>
-            </div>
-
-            {/* Bench / Emotions (1 column on mobile, 1 column on LG) */}
-            <div className="relative group overflow-hidden rounded-[20px] md:rounded-[30px] border border-white/10 bg-neutral-900 aspect-square col-span-1">
-              {randomLegacy[2] && (
-                <Image 
-                  src={`/assets/last-edition/${randomLegacy[2]}`}
-                  alt="Team Emotions" 
-                  fill 
-                  className="object-cover transition-all duration-700 group-hover:scale-110"
-                />
-              )}
-              <div className="absolute inset-0 bg-black/40 group-hover:bg-blue-600/20 transition-all"></div>
-            </div>
-
-            {/* Team Shot (Full width on mobile, 2 columns on LG) */}
-            <div className="col-span-2 relative group overflow-hidden rounded-[30px] md:rounded-[40px] border border-white/10 bg-neutral-900 aspect-[2/1] md:aspect-auto md:h-[300px] lg:h-[350px]">
-              {randomLegacy[3] && (
-                <Image 
-                  src={`/assets/last-edition/${randomLegacy[3]}`}
-                  alt="Winning Roster" 
-                  fill 
-                  className="object-cover transition-all duration-700 group-hover:scale-110 group-hover:-rotate-1"
-                />
-              )}
-              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all"></div>
-              <div className="absolute bottom-6 right-8 text-right">
-                <span className="text-[#FFD700] font-black uppercase tracking-[0.3em] text-[10px]">Edition 2.0 Finals</span>
-              </div>
-            </div>
-          </div>
+          )}
           
           <div className="mt-20 text-center reveal-on-scroll">
             <Link href="/gallery" className="inline-flex items-center gap-4 text-xs font-black uppercase tracking-[0.4em] text-neutral-500 hover:text-white transition-all group">

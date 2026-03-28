@@ -37,10 +37,12 @@ export default function Header() {
   const navLinks = [
     { name: 'Home', href: '/' },
     { name: 'About', href: '/#vision' },
+    { name: 'Results', href: '/results' },
     { name: 'Fixtures', href: '/fixtures' },
     { name: 'Standings', href: '/standings' },
     { name: 'Gallery', href: '/gallery' },
   ];
+
 
   return (
     <header className={`sticky top-0 z-50 w-full transition-all duration-300 ${isScrolled || isMenuOpen ? 'border-b border-white/10 bg-black py-3' : 'bg-transparent py-6'}`}>
@@ -53,6 +55,7 @@ export default function Header() {
               src="/assets/logos/solid-5aside.png" 
               alt="Solid 5-Aside Badge" 
               fill
+              sizes="48px"
               className="object-cover"
             />
           </div>
