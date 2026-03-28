@@ -35,6 +35,17 @@ export default function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [randomLegacy, setRandomLegacy] = useState<typeof allLegacyImages>([]);
   const [archive, setArchive] = useState<any[]>([]);
+  const [randomTeams, setRandomTeams] = useState<any[]>([]);
+  const [faqs, setFaqs] = useState<{q: string, a: string}[]>([
+    { q: "How much is the registration fee?", a: "₦50,000 per team. This covers 10 outfield players and 2 officials." },
+    { q: "What is the Champions League format?", a: "No groups. Every team plays 6 matches in a single league phase. The top 16 then move directly to knockouts." },
+    { q: "When are the matches played?", a: "Every Saturday and Sunday throughout the tournament period in Enugu." }
+  ]);
+  const [sponsors, setSponsors] = useState<{title: string, name: string, logo: string}[]>([
+    { title: "Title Sponsor", name: "CoJude International", logo: "/assets/logos/cojude.png" }
+  ]);
+  const [isRegistrationLive, setIsRegistrationLive] = useState(false);
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     // Shuffle allLegacyImages and pick first 6 for fallback
@@ -52,7 +63,44 @@ export default function Home() {
          console.error('Failed to fetch archive:', error);
        }
     };
+    
+    // Fetch dynamic teams
+    const fetchTeams = async () => {
+       try {
+         const response: any = await apiClient.get('/teams');
+         if (response.success && response.data) {
+            // Shuffle teams on every mount
+            const shuffledTeams = [...response.data].sort(() => 0.5 - Math.random());
+            setRandomTeams(shuffledTeams.slice(0, 6)); // Display exactly 6 teams
+         }
+       } catch (error) {
+         console.error('Failed to fetch teams:', error);
+       }
+    };
+
+    // Fetch dynamic global settings (FAQs and Sponsors)
+    const fetchSettings = async () => {
+      try {
+        const response: any = await apiClient.get('/settings');
+        if (response.success && response.data) {
+           if (response.data.landing_faqs && response.data.landing_faqs.length > 0) {
+             setFaqs(response.data.landing_faqs);
+           }
+           if (response.data.landing_sponsors && response.data.landing_sponsors.length > 0) {
+             setSponsors(response.data.landing_sponsors);
+           }
+           if (response.data.registration_live !== undefined) {
+             setIsRegistrationLive(response.data.registration_live === 'true' || response.data.registration_live === true);
+           }
+        }
+      } catch (error) {
+        console.error('Failed to fetch settings:', error);
+      }
+    };
+
     fetchArchive();
+    fetchTeams();
+    fetchSettings();
   }, []);
 
   useEffect(() => {
@@ -70,11 +118,12 @@ export default function Home() {
       });
     }, observerOptions);
 
+    // Observe all elements, including newly fetched dynamic ones
     const elements = document.querySelectorAll('.reveal-on-scroll');
     elements.forEach((el) => observer.observe(el));
 
     return () => observer.disconnect();
-  }, []);
+  }, [randomTeams, archive]);
 
   const [currentHero, setCurrentHero] = useState(0);
   const heroImages = [
@@ -124,17 +173,19 @@ export default function Home() {
 
         <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] w-full max-w-7xl">
           <div className="flex-1 flex flex-col items-center justify-center text-center animate-reveal py-20">
-            <div className="mb-14 inline-flex items-center gap-4 rounded-full border border-blue-500/50 bg-blue-500/10 px-8 py-3.5 backdrop-blur-xl shadow-[0_0_50px_rgba(59,130,246,0.25)] group transition-all hover:scale-105 hover:bg-blue-500/20 active:scale-95">
-              <div className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500 ring-4 ring-blue-500/30"></span>
+            {isRegistrationLive && (
+              <div className="mb-14 inline-flex items-center gap-4 rounded-full border border-blue-500/50 bg-blue-500/10 px-8 py-3.5 backdrop-blur-xl shadow-[0_0_50px_rgba(59,130,246,0.25)] group transition-all hover:scale-105 hover:bg-blue-500/20 active:scale-95">
+                <div className="flex h-3 w-3 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500 ring-4 ring-blue-500/30"></span>
+                </div>
+                <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.4em] text-blue-400 group-hover:text-blue-200 transition-colors drop-shadow-lg">
+                  REGISTRATION FOR <span className="text-white">{currentYear} SEASON</span> IS NOW <span className="text-[#FFD700] animate-pulse drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">LIVE</span>
+                </span>
               </div>
-              <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.4em] text-blue-400 group-hover:text-blue-200 transition-colors drop-shadow-lg">
-                REGISTRATION FOR <span className="text-white">2026 SEASON</span> IS NOW <span className="text-[#FFD700] animate-pulse drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">LIVE</span>
-              </span>
-            </div>
+            )}
             
-            <h1 className="mb-8 font-outfit text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-8xl leading-[0.95] perspective-1000 uppercase text-center">
+            <h1 className={`font-outfit text-5xl font-extrabold tracking-tight text-white sm:text-7xl lg:text-8xl leading-[0.95] perspective-1000 uppercase text-center ${!isRegistrationLive && 'mt-14'} mb-8`}>
               Solid <span className="relative inline-block">
                 FM
                 <span className="absolute -top-4 md:-top-7 left-0 md:left-1 w-full text-center text-[#FFD700] text-[8px] md:text-xs font-black uppercase tracking-[0.4em] drop-shadow-[0_0_10px_rgba(255,215,0,0.3)] animate-reveal delay-300 pointer-events-none whitespace-nowrap">CoJude</span>
@@ -233,11 +284,11 @@ export default function Home() {
         <div className="container mx-auto max-w-7xl">
           <div className="text-center mb-24 reveal-on-scroll">
             <h2 className="text-sm font-bold uppercase tracking-[0.4em] text-blue-500 mb-10">About Us</h2>
-            <h3 className="mb-10 text-5xl font-black tracking-tight text-white md:text-7xl italic uppercase leading-[0.9]">The Soul of <br /><span className="text-[#FFD700] not-italic">Enugu</span> Football.</h3>
+            <h3 className="mb-10 text-5xl font-black tracking-tight text-white md:text-7xl italic uppercase leading-[0.9]">CoJude SolidFM 5-Aside <br /><span className="text-[#FFD700] not-italic">Football</span> Enugu.</h3>
             
             <div className="mx-auto max-w-4xl text-lg md:text-xl leading-relaxed text-neutral-400 font-medium border-t border-white/10 pt-10 space-y-6">
               <p>
-                SolidFM Five-Aside Football is a fast-paced, community-driven football competition organized by Solid100.9 FM, which is situated at 10b savage crescent GRA Enugu, bringing together football lovers from all walks of life. Whether you're a weekend warrior, a skilled dribbler, or just in it for the vibes, this five-a-side tournament is all about passion, teamwork, and good sportsmanship.
+                SolidFM 5-Aside Football is a fast-paced, community-driven football competition organized by Solid100.9 FM, which is situated at 10b savage crescent GRA Enugu, bringing together football lovers from all walks of life. Whether you're a weekend warrior, a skilled dribbler, or just in it for the vibes, this five-a-side tournament is all about passion, teamwork, and good sportsmanship.
               </p>
               <p>
                 Played on smaller pitches with fewer players, the format encourages quick play, sharp passing, and loads of goals, making it exciting for both players and fans. Teams battle it out not just for bragging rights, but also for amazing prizes and the pride of being crowned SolidFM champions.
@@ -525,33 +576,54 @@ export default function Home() {
             <h3 className="text-6xl font-black text-white italic tracking-tighter sm:text-8xl leading-none uppercase">The Enugu <br /><span className="text-[#FFD700]">Guard.</span></h3>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-8 gap-y-20 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {[
-              { name: "Enugu FC", city: "Enugu", color: "bg-neutral-600" },
-              { name: "Nsukka Rangers", city: "Nsukka", color: "bg-blue-600" },
-              { name: "Uwani Warriors", city: "Enugu", color: "bg-red-600" },
-              { name: "Agbani Stars", city: "Agbani", color: "bg-emerald-600" },
-              { name: "Trans Ekulu FC", city: "Enugu", color: "bg-yellow-600" },
-              { name: "New Haven", city: "Enugu", color: "bg-orange-600" },
-            ].map((team, i) => (
-              <div key={i} className={`group flex flex-col items-center transition-transform hover:-translate-y-4 hover:animate-float reveal-on-scroll stagger-${(i%4)+1}`}>
-                <div className={`relative mb-8 flex h-32 w-32 items-center justify-center rounded-[40px] border border-white/5 bg-neutral-900 shadow-2xl transition-all group-hover:border-blue-500 group-hover:bg-blue-600/5 group-hover:scale-105`}>
-                  <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity rounded-[40px] ${team.color}`}></div>
-                  <span className={`text-5xl font-black ${team.color.replace('bg-', 'text-')} opacity-40 italic transition-all group-hover:opacity-100 group-hover:scale-125`}>
-                    {team.name.charAt(0)}
-                  </span>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-20 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+            {randomTeams.length > 0 ? randomTeams.map((team, i) => {
+              // Pre-defined fallback background colors for visual variety
+              const fallbackColors = ['bg-neutral-600', 'bg-blue-600', 'bg-red-600', 'bg-emerald-600', 'bg-yellow-600', 'bg-purple-600'];
+              const fallbackColor = fallbackColors[i % fallbackColors.length];
+              const textColor = fallbackColor.replace('bg-', 'text-');
+              
+              return (
+              <div key={team._id || i} className={`group flex flex-col items-center transition-transform hover:-translate-y-4 hover:animate-float reveal-on-scroll stagger-${(i%6)+1}`}>
+                <div className={`relative mb-8 flex h-32 w-32 items-center justify-center rounded-[40px] border border-white/5 bg-neutral-900 shadow-2xl transition-all group-hover:border-blue-500 group-hover:bg-blue-600/10 group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(59,130,246,0.2)] overflow-hidden`}>
+                  {team.logo && !team.logo.includes('ui-avatars.com') ? (
+                    <Image 
+                      src={team.logo} 
+                      alt={team.name}
+                      fill
+                      sizes="128px"
+                      className="object-contain p-4 transition-transform duration-500 group-hover:scale-110"
+                    />
+                  ) : (
+                    <>
+                      <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity rounded-[40px] ${fallbackColor}`}></div>
+                      <span className={`text-5xl font-black ${textColor} opacity-40 italic transition-all duration-500 group-hover:opacity-100 group-hover:scale-125`}>
+                        {team.name.charAt(0)}
+                      </span>
+                    </>
+                  )}
                 </div>
-                <h4 className="text-center text-base font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors leading-none">{team.name}</h4>
-                <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-600 font-black mt-3 italic">{team.city}</p>
+                <h4 className="text-center text-sm md:text-base font-black text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors leading-tight line-clamp-1 px-2 w-full">{team.name}</h4>
+                <p className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] text-neutral-600 font-black mt-2 md:mt-3 italic truncate w-full flex justify-center">{team.city || 'Unknown City'}</p>
               </div>
-            ))}
+            )}) : (
+               // Simple skeleton loader or fallback
+               Array.from({ length: 6 }).map((_, i) => (
+                 <div key={i} className="flex flex-col items-center opacity-30 animate-pulse">
+                    <div className="mb-8 h-32 w-32 rounded-[40px] bg-neutral-900 border border-white/5"></div>
+                    <div className="h-4 w-24 bg-neutral-800 rounded mb-2"></div>
+                    <div className="h-2 w-16 bg-neutral-900 rounded"></div>
+                 </div>
+               ))
+            )}
             
-            <Link href="/register-team" className="group flex flex-col items-center transition-transform hover:-translate-y-4 reveal-on-scroll">
-              <div className="mb-8 flex h-32 w-32 items-center justify-center rounded-[40px] border-2 border-dashed border-blue-500/40 bg-blue-500/5 transition-all group-hover:bg-blue-600 group-hover:border-blue-600 group-hover:scale-105 shadow-2xl">
-                <span className="text-5xl font-black text-blue-500 group-hover:text-white group-hover:scale-125 transition-all">+</span>
+            <Link href="/register-team" className={`group flex flex-col items-center transition-transform hover:-translate-y-4 reveal-on-scroll stagger-${(randomTeams.length%6)+1}`}>
+              <div className="mb-8 flex h-32 w-32 items-center justify-center rounded-[40px] border-2 border-dashed border-blue-500/40 bg-blue-500/5 transition-all group-hover:bg-blue-600 group-hover:border-blue-600 group-hover:scale-105 group-hover:shadow-[0_0_30px_rgba(59,130,246,0.3)] shadow-2xl overflow-hidden relative">
+                <div className="absolute inset-0 bg-blue-500/10 blur-xl scale-0 group-hover:scale-150 transition-transform duration-700"></div>
+                <span className="text-5xl font-black text-blue-500 group-hover:text-white group-hover:scale-125 transition-all relative z-10">+</span>
               </div>
               <h4 className="text-center text-base font-black text-blue-500 uppercase tracking-tighter group-hover:text-white transition-colors leading-none">Join Them</h4>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-600 font-black mt-3 italic underline decoration-blue-500/30 underline-offset-4">Register Now</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-600 font-black mt-3 italic underline decoration-blue-500/30 underline-offset-4 group-hover:text-blue-400 group-hover:decoration-blue-400 transition-colors">Register Now</p>
             </Link>
           </div>
         </div>
@@ -565,11 +637,7 @@ export default function Home() {
               <h2 className="text-6xl font-black text-white italic tracking-tighter sm:text-8xl leading-none uppercase">Quick <span className="text-blue-500 not-italic">Brief.</span></h2>
            </div>
            <div className="space-y-8">
-              {[
-                { q: "How much is the registration fee?", a: "₦50,000 per team. This covers 10 outfield players and 2 officials." },
-                { q: "What is the Champions League format?", a: "No groups. Every team plays 6 matches in a single league phase. The top 16 then move directly to knockouts." },
-                { q: "When are the matches played?", a: "Every Saturday and Sunday throughout the tournament period in Enugu." },
-              ].map((faq, i) => (
+              {faqs.map((faq, i) => (
                 <div key={i} className={`p-8 md:p-10 border border-white/5 bg-black/40 rounded-[30px] md:rounded-[40px] transition-all hover:bg-black/60 hover:border-blue-500/20 reveal-on-scroll stagger-${(i%2)+1}`}>
                   <h4 className="text-lg md:text-xl font-black text-white mb-4 italic uppercase tracking-tight">Q: {faq.q}</h4>
                   <p className="text-base md:text-lg text-neutral-400 font-medium leading-relaxed">{faq.a}</p>
@@ -600,26 +668,26 @@ export default function Home() {
           <div className="text-center reveal-on-scroll">
             <h2 className="mb-20 text-4xl font-extrabold tracking-tight text-white uppercase italic tracking-[0.3em] opacity-30">Powering the Game</h2>
             <div className="flex flex-wrap items-center justify-center gap-10 md:gap-16 opacity-80 hover:opacity-100 transition-all duration-700">
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-[#FFD700] mb-4">Title Sponsor</span>
-                <div className="h-24 w-48 overflow-hidden rounded-2xl bg-white p-2 shadow-2xl flex items-center justify-center transition-transform hover:scale-110">
-                  <img src="/assets/logos/cojude.png" alt="CoJude International" className="object-contain h-full w-full" />
-                </div>
-              </div>
-              <div className="hidden md:block h-24 w-px bg-white/20"></div>
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-blue-500 mb-4">Media Partner</span>
-                <div className="h-24 w-24 overflow-hidden rounded-full bg-neutral-200 border-4 border-white shadow-2xl flex items-center justify-center transition-transform hover:scale-110">
-                  <img src="/assets/logos/solidfm.png" alt="Solid FM" className="object-cover h-full w-full" />
-                </div>
-              </div>
-              <div className="hidden md:block h-24 w-px bg-white/20"></div>
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-emerald-500 mb-4">Official Association</span>
-                <div className="h-24 w-24 overflow-hidden rounded-full bg-white shadow-2xl flex items-center justify-center transition-transform hover:scale-110">
-                  <img src="/assets/logos/ensfa.png" alt="ENSFA" className="object-contain h-full w-full p-1" />
-                </div>
-              </div>
+               {sponsors.map((sponsor, idx) => {
+                 let badgeColor = "text-[#FFD700]";
+                 if (idx % 3 === 1) badgeColor = "text-blue-500";
+                 if (idx % 3 === 2) badgeColor = "text-emerald-500";
+
+                 return (
+                   <div key={idx} className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
+                     <div className="flex flex-col items-center">
+                       <span className={`text-[10px] font-black uppercase tracking-[0.4em] ${badgeColor} mb-4 text-center`}>{sponsor.title}</span>
+                       <div className="h-24 min-w-[6rem] px-8 py-2 overflow-hidden rounded-[24px] bg-white shadow-2xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-transparent hover:border-white/50">
+                         <img src={sponsor.logo} alt={sponsor.name} className="object-contain h-full w-full max-w-[200px]" />
+                       </div>
+                     </div>
+                     {/* Separator Line (except for the last item) */}
+                     {idx !== sponsors.length - 1 && (
+                       <div className="hidden md:block h-24 w-px bg-white/20"></div>
+                     )}
+                   </div>
+                 );
+               })}
             </div>
             <p className="mx-auto mt-24 max-w-xl text-xs leading-relaxed text-neutral-600 font-black uppercase tracking-[0.4em] italic">
               Exclusive sponsorship opportunities for visionary brands.

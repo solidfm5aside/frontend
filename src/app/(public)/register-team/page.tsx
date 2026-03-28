@@ -23,15 +23,13 @@ export default function RegisterTeamPage() {
   useEffect(() => {
     const checkActiveTournament = async () => {
       try {
-        const response: any = await apiClient.get('/tournaments');
-        if (response.success) {
-          const hasActive = response.data.some(
-            (t: any) => t.status === 'upcoming' || t.status === 'ongoing'
-          );
-          setIsRegistrationOpen(hasActive);
+        const response: any = await apiClient.get('/settings');
+        if (response.success && response.data) {
+          const isLive = response.data.registration_live === 'true' || response.data.registration_live === true;
+          setIsRegistrationOpen(isLive);
         }
       } catch (e) {
-        console.error('Failed to check tournaments');
+        console.error('Failed to check tournament status');
       } finally {
         setCheckingStatus(false);
       }

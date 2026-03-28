@@ -5,6 +5,7 @@ import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, MapPin, Clock } from 'lucide-react';
 import MatchControllerModal from '@/components/admin/MatchControllerModal';
+import EditMatchModal from '@/components/admin/EditMatchModal';
 
 
 interface Team {
@@ -51,6 +52,7 @@ export default function MatchesManagementPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [dayPage, setDayPage] = useState(0); 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [editMatchId, setEditMatchId] = useState<string | null>(null);
 
 
   const fetchMatches = async () => {
@@ -251,12 +253,20 @@ export default function MatchesManagementPage() {
 
                   <div className="flex items-center gap-2 shrink-0">
                     {match.status === 'scheduled' && (
-                      <button
-                        onClick={() => handleStatusUpdate(match._id, 'live')}
-                        className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 whitespace-nowrap"
-                      >
-                        🚀 Start
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setEditMatchId(match._id)}
+                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-all whitespace-nowrap"
+                        >
+                          🖊 Edit
+                        </button>
+                        <button
+                          onClick={() => handleStatusUpdate(match._id, 'live')}
+                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 whitespace-nowrap"
+                        >
+                          🚀 Start
+                        </button>
+                      </>
                     )}
                     {match.status === 'live' && (
                       <>
@@ -298,6 +308,16 @@ export default function MatchesManagementPage() {
         <MatchControllerModal
           matchId={selectedMatchId}
           onClose={() => setSelectedMatchId(null)}
+          onUpdate={fetchMatches}
+        />
+      )}
+
+      {editMatchId && (
+        <EditMatchModal
+          matchId={editMatchId}
+          initialDate={matches.find(m => m._id === editMatchId)?.date || ''}
+          initialVenue={matches.find(m => m._id === editMatchId)?.venue || ''}
+          onClose={() => setEditMatchId(null)}
           onUpdate={fetchMatches}
         />
       )}

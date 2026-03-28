@@ -49,9 +49,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { name: 'Matches', href: '/admin/matches', icon: '⚽' },
   ];
 
-  // Only super_admin can manage other admins
+  // Only super_admin can manage other admins and global settings
   if (admin.role === 'super_admin') {
     navLinks.push({ name: 'Admins', href: '/admin/admins', icon: '🔒' });
+    navLinks.push({ name: 'Settings', href: '/admin/settings', icon: '⚙️' });
   }
 
   return (
