@@ -40,6 +40,7 @@ export default function Header() {
     { name: 'Results', href: '/results' },
     { name: 'Fixtures', href: '/fixtures' },
     { name: 'Standings', href: '/standings' },
+    { name: 'Bracket', href: '/bracket' },
     { name: 'Gallery', href: '/gallery' },
   ];
 

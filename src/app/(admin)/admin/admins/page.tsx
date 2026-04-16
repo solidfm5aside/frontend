@@ -83,27 +83,27 @@ export default function AdminsManagementPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.02]">
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Administrator</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Role</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Status</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right">Actions</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Administrator</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Role</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Status</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {admins.map((staff) => (
                 <tr key={staff._id} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-8 py-8">
+                  <td className="px-4 md:px-8 py-6 md:py-8">
                     <div className="flex items-center gap-4">
                       <div className="h-12 w-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-neutral-400 text-xl group-hover:text-white transition-colors">
                         {staff.name.charAt(0)}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-white tracking-tight">{staff.name}</p>
-                        <p className="text-[11px] text-neutral-600 font-medium">{staff.email}</p>
+                        <p className="text-[11px] text-neutral-600 font-medium truncate max-w-[150px] sm:max-w-none">{staff.email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-8 py-8">
+                  <td className="px-4 md:px-8 py-6 md:py-8">
                     <span className={`text-[10px] font-black uppercase tracking-[0.2em] italic ${
                       staff.role === 'super_admin' ? 'text-blue-500' : 
                       staff.role === 'admin' ? 'text-white' : 'text-neutral-600'
@@ -111,18 +111,18 @@ export default function AdminsManagementPage() {
                       {staff.role}
                     </span>
                   </td>
-                  <td className="px-8 py-8">
+                  <td className="px-4 md:px-8 py-6 md:py-8">
                     <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                       staff.isVerified ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20 animate-pulse'
                     }`}>
                       {staff.isVerified ? 'Verified' : 'Pending'}
                     </span>
                   </td>
-                  <td className="px-8 py-8 text-right">
+                  <td className="px-4 md:px-8 py-6 md:py-8 text-right">
                     {!staff.isVerified && (
                       <button
                         onClick={() => handleVerify(staff._id)}
-                        className="h-10 px-6 rounded-xl bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all shadow-lg shadow-blue-600/20"
+                        className="h-10 px-6 rounded-xl bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white hover:text-black transition-all shadow-lg shadow-blue-600/20 whitespace-nowrap"
                       >
                         Verify Staff
                       </button>

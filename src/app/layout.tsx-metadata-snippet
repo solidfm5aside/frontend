@@ -1,0 +1,66 @@
+'use client';
+
+import { Metadata } from 'next';
+
+const siteConfig = {
+  name: 'Solid FM 5-Aside',
+  description: 'The premier league for 5-aside football in Nigeria. Elite competition, grassroots talent, and professional tournament management.',
+  url: 'https://solidfm5aside.com',
+  ogImage: 'https://solidfm5aside.com/assets/logos/solid-5aside.png',
+  links: {
+    facebook: 'https://facebook.com/solidfm5asidefootball',
+    instagram: 'https://instagram.com/solidfm5asidefootbal',
+    tiktok: 'https://tiktok.com/@solidfm5asidefootball',
+  },
+  keywords: [
+    '5-aside football',
+    'Solid FM',
+    'Nigeria football tournament',
+    'Grassroots football',
+    'Abuja football leagues',
+    'Football scout Nigeria',
+    'Amateur football tournament',
+    'Solid FM 5-Aside'
+  ],
+};
+
+export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
+  keywords: siteConfig.keywords,
+  authors: [{ name: 'Solid FM', url: siteConfig.url }],
+  creator: 'Solid FM',
+  openGraph: {
+    type: 'website',
+    locale: 'en_NG',
+    url: siteConfig.url,
+    title: siteConfig.name,
+    description: siteConfig.description,
+    siteName: siteConfig.name,
+    images: [
+      {
+        url: siteConfig.ogImage,
+        width: 1200,
+        height: 630,
+        alt: siteConfig.name,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: [siteConfig.ogImage],
+    creator: '@solidfm5aside',
+  },
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  },
+  manifest: '/manifest.json',
+};

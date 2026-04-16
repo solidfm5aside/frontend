@@ -127,7 +127,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-40 border-b border-white/5 bg-black/40 py-6 px-10 backdrop-blur-xl flex items-center justify-between lg:hidden">
+        <header className="sticky top-0 z-40 border-b border-white/5 bg-black/40 py-6 px-4 sm:px-8 backdrop-blur-xl flex items-center justify-between lg:hidden">
             <div className="flex items-center gap-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-black text-white">S</div>
               <span className="text-xs font-black uppercase tracking-widest">Admin Portal</span>

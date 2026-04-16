@@ -5,6 +5,9 @@ import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
 import { Users, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import { PageSpinner } from '@/components/ui/Spinner';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { TeamAvatar } from '@/components/ui/TeamAvatar';
 
 interface Team {
   _id: string;
@@ -14,6 +17,7 @@ interface Team {
   contactPhone: string;
   contactEmail: string;
   registrationStatus: 'pending' | 'registered' | 'withdrawn';
+  logo?: string;
 }
 
 export default function TeamsManagementPage() {
@@ -27,8 +31,8 @@ export default function TeamsManagementPage() {
     limit: 10
   });
 
-  const fetchTeams = async (page = 1, currentFilter = filter) => {
-    setIsLoading(true);
+  const fetchTeams = async (page = 1, currentFilter = filter, silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const response: any = await apiClient.get(`/teams?page=${page}&limit=10&registrationStatus=${currentFilter}`);
       if (response.success) {
@@ -38,7 +42,7 @@ export default function TeamsManagementPage() {
     } catch (error) {
       console.error('Failed to fetch teams:', error);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -47,13 +51,18 @@ export default function TeamsManagementPage() {
   }, [currentPage, filter]);
 
   const handleStatusUpdate = async (id: string, status: string) => {
+    // Optimistic UI update
+    setTeams(prev => prev.map(t => t._id === id ? { ...t, registrationStatus: status as any } : t));
     try {
       const response: any = await apiClient.patch(`/teams/${id}`, { registrationStatus: status });
       if (response.success) {
-        setTeams(teams.map(t => t._id === id ? { ...t, registrationStatus: status as any } : t));
         toast.success(`Team status updated to ${status}`);
+      } else {
+        fetchTeams(currentPage, filter, true);
+        toast.error('Failed to update status');
       }
     } catch (error) {
+      fetchTeams(currentPage, filter, true);
       toast.error('Failed to update status');
     }
   };
@@ -63,13 +72,7 @@ export default function TeamsManagementPage() {
     setCurrentPage(1); // Reset to first page on filter change
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
-      </div>
-    );
-  }
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div className="space-y-12 animate-reveal">
@@ -79,12 +82,12 @@ export default function TeamsManagementPage() {
           <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">Manage Season Registrations</p>
         </div>
         
-        <div className="flex gap-2 p-1.5 rounded-2xl bg-white/[0.02] border border-white/5">
+        <div className="flex gap-2 p-1.5 rounded-2xl bg-white/[0.02] border border-white/5 overflow-x-auto scrollbar-hide">
             {['all', 'pending', 'registered'].map((f) => (
               <button
                 key={f}
                 onClick={() => handleFilterChange(f as any)}
-                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
                   filter === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'
                 }`}
               >
@@ -99,40 +102,32 @@ export default function TeamsManagementPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.02]">
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Squad Name</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Captain / Contact</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Status</th>
-                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right">Actions</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Squad Name</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Captain / Contact</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Status</th>
+                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {teams.length > 0 ? teams.map((team) => (
                 <tr key={team._id} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-8 py-8">
+                  <td className="px-4 md:px-8 py-6 md:py-8">
                     <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center font-black text-blue-500 text-xl">
-                        {team.name.charAt(0)}
-                      </div>
+                      <TeamAvatar name={team.name} logo={team.logo} size="sm" />
                       <div>
                         <p className="text-sm font-bold text-white tracking-tight">{team.name}</p>
                         <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-1">{team.city}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-8 py-8">
+                  <td className="px-4 md:px-8 py-6 md:py-8">
                     <p className="text-sm font-medium text-neutral-300">{team.captainName}</p>
-                    <p className="text-[10px] font-bold text-neutral-600 mt-1">{team.contactPhone} • {team.contactEmail}</p>
+                    <p className="text-[10px] font-bold text-neutral-600 mt-1 break-all">{team.contactPhone} • {team.contactEmail}</p>
                   </td>
-                  <td className="px-8 py-8">
-                    <span className={`inline-flex px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                      team.registrationStatus === 'registered' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' :
-                      team.registrationStatus === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
-                      'bg-neutral-500/10 text-neutral-500 border border-neutral-500/20'
-                    }`}>
-                      {team.registrationStatus}
-                    </span>
+                  <td className="px-4 md:px-8 py-6 md:py-8">
+                    <StatusBadge status={team.registrationStatus} />
                   </td>
-                  <td className="px-8 py-8 text-right">
+                  <td className="px-4 md:px-8 py-6 md:py-8 text-right">
                     <div className="flex justify-end items-center gap-3">
                       <Link
                         href={`/admin/teams/${team._id}/squad`}
@@ -165,7 +160,7 @@ export default function TeamsManagementPage() {
                       <button
                         onClick={() => {
                           if (confirm('Delete this team registration?')) {
-                            apiClient.delete(`/teams/${team._id}`).then(() => fetchTeams());
+                            apiClient.delete(`/teams/${team._id}`).then(() => fetchTeams(currentPage, filter, true));
                           }
                         }}
                         className="h-10 w-10 flex items-center justify-center rounded-xl border border-white/5 text-neutral-700 hover:text-red-600 transition-all"

@@ -92,13 +92,13 @@ export default function RegisterTeamPage() {
       <div className="flex min-h-screen items-center justify-center bg-black px-6 font-outfit relative overflow-hidden">
         <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="w-full max-w-md text-center space-y-8 relative z-10 animate-reveal">
-          <div className="inline-flex h-24 w-24 items-center justify-center rounded-[40px] bg-red-500/10 border border-red-500/20 font-black text-red-500 text-4xl mb-6">
+          <div className="inline-flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[30px] sm:rounded-[40px] bg-red-500/10 border border-red-500/20 font-black text-red-500 text-3xl sm:text-4xl mb-6">
             !
           </div>
           <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-tight">
             Registration <br /><span className="text-red-500 not-italic">Closed.</span>
           </h2>
-          <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-xl">
+          <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-6 sm:p-8 backdrop-blur-xl">
             <p className="text-sm font-medium text-neutral-400 leading-relaxed mb-6">
               There are currently no upcoming or ongoing tournament seasons accepting registrations.
             </p>
@@ -118,13 +118,13 @@ export default function RegisterTeamPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black px-6 font-outfit">
         <div className="w-full max-w-md text-center space-y-8 animate-reveal">
-          <div className="inline-flex h-24 w-24 items-center justify-center rounded-[40px] bg-blue-600 font-black text-white text-4xl mb-6 shadow-2xl shadow-blue-600/20">
+          <div className="inline-flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-[30px] sm:rounded-[40px] bg-blue-600 font-black text-white text-3xl sm:text-4xl mb-6 shadow-2xl shadow-blue-600/20">
             ✓
           </div>
           <h2 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-tight">
             Registration <br /><span className="text-blue-500 not-italic">Received.</span>
           </h2>
-          <div className="rounded-[40px] border border-blue-500/10 bg-blue-500/5 p-8 backdrop-blur-xl">
+          <div className="rounded-[28px] sm:rounded-[40px] border border-blue-500/10 bg-blue-500/5 p-6 sm:p-8 backdrop-blur-xl">
             <p className="text-lg font-medium text-neutral-300 leading-relaxed mb-6">{message}</p>
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest leading-loose">
               Our coordinators will reach out to the captain via the provided contact info within 24 hours.
@@ -139,7 +139,7 @@ export default function RegisterTeamPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black px-6 py-20 font-outfit relative overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-black px-4 sm:px-6 py-12 sm:py-20 font-outfit relative overflow-hidden">
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -154,7 +154,7 @@ export default function RegisterTeamPage() {
           <p className="mt-4 text-xs md:text-sm font-bold text-neutral-500 uppercase tracking-[0.3em]">Join the SolidFM 5-A-Side Elite</p>
         </div>
 
-        <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-12 backdrop-blur-3xl shadow-2xl">
+        <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-6 md:p-12 backdrop-blur-3xl shadow-2xl">
           <form className="space-y-8 md:space-y-10" onSubmit={handleSubmit}>
             {status === 'error' && (
               <div className="rounded-2xl bg-red-500/10 p-5 text-[10px] md:text-xs font-bold uppercase tracking-widest text-red-500 border border-red-500/20">
@@ -168,7 +168,7 @@ export default function RegisterTeamPage() {
                 <label className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500 mb-6 block text-center">Squad Logo</label>
                 <div className="relative group">
                   <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" id="logo-upload" />
-                  <label htmlFor="logo-upload" className="flex h-32 w-32 md:h-40 md:w-40 cursor-pointer items-center justify-center rounded-[40px] border-2 border-dashed border-white/10 bg-white/5 transition-all hover:border-blue-500/50 hover:bg-white/10 overflow-hidden relative">
+                  <label htmlFor="logo-upload" className="flex h-28 w-28 sm:h-32 sm:w-32 md:h-40 md:w-40 cursor-pointer items-center justify-center rounded-[30px] sm:rounded-[40px] border-2 border-dashed border-white/10 bg-white/5 transition-all hover:border-blue-500/50 hover:bg-white/10 overflow-hidden relative">
                     {logoPreview ? (
                       <img src={logoPreview} alt="Logo Preview" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
                     ) : (

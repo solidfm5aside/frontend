@@ -1,17 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 import { useAuthStore } from '@/store/use-auth-store';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const from = searchParams.get('from') || '/admin/dashboard';
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,7 +27,7 @@ export default function LoginPage() {
       const response: any = await apiClient.post('/auth/login', { email, password });
       if (response.success) {
         setAuth(response.data.admin, response.data.accessToken, response.data.refreshToken);
-        router.push('/admin/dashboard');
+        router.replace(from);
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -46,7 +50,7 @@ export default function LoginPage() {
           <p className="mt-4 text-xs font-bold text-neutral-500 uppercase tracking-[0.2em]">Authorized Access Only</p>
         </div>
 
-        <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-10 backdrop-blur-xl shadow-2xl">
+        <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-7 sm:p-10 backdrop-blur-xl shadow-2xl">
           <form className="space-y-8" onSubmit={handleSubmit}>
             {error && (
               <div className={`rounded-2xl p-4 text-xs font-bold uppercase tracking-widest border transition-all ${
@@ -72,14 +76,28 @@ export default function LoginPage() {
               </div>
               <div className="group">
                 <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Password</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••"
+                    className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all pr-14"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <div className="mt-2 text-right">
+                  <Link href="/forgot-password" title="Click here to reset your password" id="forgot-password-link" className="text-[10px] font-bold text-neutral-500 hover:text-blue-500 transition-colors uppercase tracking-widest">
+                    Forgot Password?
+                  </Link>
+                </div>
               </div>
             </div>
 

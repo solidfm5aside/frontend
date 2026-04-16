@@ -33,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
       ></div>
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-lg overflow-hidden rounded-[40px] border border-white/10 bg-[#0A0A0A] p-10 shadow-2xl animate-reveal-up">
+      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl sm:rounded-[40px] border border-white/10 bg-[#0A0A0A] p-6 sm:p-10 shadow-2xl animate-reveal-up">
         {/* Glow effect */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-blue-600/10 blur-[80px] rounded-full"></div>
 

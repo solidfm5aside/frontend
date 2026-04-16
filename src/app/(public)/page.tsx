@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Image from "next/image";
 import Link from "next/link";
 import apiClient from '@/lib/api-client';
+import PublicityCarousel from '@/components/PublicityCarousel';
 
 const firstEditionImages = [
   "first01.jpeg", "first02.jpeg", "first03.jpeg", "first04.jpeg", "first05.jpeg",
@@ -243,6 +244,8 @@ export default function Home() {
         </div>
       </section>
 
+      <PublicityCarousel />
+
       {/* Human Stories / Testimony Section */}
       <section className="bg-neutral-900 py-32 px-6 relative overflow-hidden">
         {/* Background Image of Fans */}
@@ -267,7 +270,7 @@ export default function Home() {
                 <div className="absolute top-0 right-0 p-8 text-blue-500 opacity-20 text-7xl font-black italic">"</div>
                 <p className="text-xl text-neutral-300 font-medium leading-relaxed mb-10 relative z-10 italic">"{story.t}"</p>
                 <div className="flex items-center gap-5">
-                  <div className="h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/20">{story.n.charAt(0)}</div>
+                  <div className="h-12 w-12 rounded-2xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/20">{story.n?.charAt(0) || '?'}</div>
                   <div>
                     <h4 className="text-white font-extrabold text-lg tracking-tight">{story.n}</h4>
                     <p className="text-blue-500 font-black uppercase tracking-[0.2em] text-[10px]">{story.r}</p>
@@ -373,11 +376,11 @@ export default function Home() {
                        {tourney.champion ? (
                          <div className="flex items-center gap-4">
                            <div className="h-10 w-10 flex-shrink-0 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center font-black text-white text-base">
-                             {tourney.champion.name.charAt(0)}
+                             {tourney.champion.name?.charAt(0) || '?'}
                            </div>
                            <div>
-                             <span className="text-xl font-bold text-white tracking-tight block leading-none mb-1">{tourney.champion.name}</span>
-                             <span className="text-[10px] uppercase font-black tracking-widest text-neutral-500">{tourney.champion.city}</span>
+                             <span className="text-xl font-bold text-white tracking-tight block leading-none mb-1">{tourney.champion.name || 'Deleted Team'}</span>
+                             <span className="text-[10px] uppercase font-black tracking-widest text-neutral-500">{tourney.champion.city || 'N/A'}</span>
                            </div>
                          </div>
                        ) : (
@@ -598,7 +601,7 @@ export default function Home() {
                     <>
                       <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity rounded-[40px] ${fallbackColor}`}></div>
                       <span className={`text-5xl font-black ${textColor} opacity-40 italic transition-all duration-500 group-hover:opacity-100 group-hover:scale-125`}>
-                        {team.name.charAt(0)}
+                        {team.name?.charAt(0) || '?'}
                       </span>
                     </>
                   )}

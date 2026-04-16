@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/store/use-auth-store';
 import { CalendarDays, AlertCircle, LockKeyhole } from 'lucide-react';
 import Link from 'next/link';
-import { Modal } from '@/components/ui/Modal';
+import { PageSpinner } from '@/components/ui/Spinner';
+import { FixtureConfigModal } from '@/components/admin/FixtureConfigModal';
 
 interface Stats {
   totalTeams: number;
@@ -26,7 +27,6 @@ interface UpcomingTournament {
   currentStage: string;
 }
 
-
 interface Readiness {
   isReady: boolean;
   totalTeams: number;
@@ -40,49 +40,9 @@ export default function DashboardPage() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [numRounds, setNumRounds] = useState(6);
-  const [matchesPerDay, setMatchesPerDay] = useState(7);
   const [venueCount, setVenueCount] = useState(0);
   const { admin } = useAuthStore();
   const isSuperAdmin = admin?.role === 'super_admin';
-
-  const calculateEndDate = () => {
-    if (!upcomingTournament) return null;
-    
-    const totalMatches = numRounds * 14;
-    const totalDaysNeeded = Math.ceil(totalMatches / matchesPerDay);
-    
-    // Logic mirror of backend for end date estimate
-    let currentDate = new Date(upcomingTournament.startDate);
-    const day = currentDate.getUTCDay();
-    const diff = (6 - day + 7) % 7;
-    currentDate.setUTCDate(currentDate.getUTCDate() + diff);
-    
-    let daysCount = 1;
-    let isSat = true;
-    
-    while (daysCount < totalDaysNeeded) {
-      if (isSat) {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-        isSat = false;
-      } else {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 6);
-        isSat = true;
-      }
-      daysCount++;
-    }
-    
-    return currentDate;
-  };
-
-  const estimatedEndDate = calculateEndDate();
-  const startTime = upcomingTournament ? (() => {
-    const d = new Date(upcomingTournament.startDate);
-    const diff = (6 - d.getUTCDay() + 7) % 7;
-    d.setUTCDate(d.getUTCDate() + diff);
-    return d;
-  })() : null;
-
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -107,19 +67,15 @@ export default function DashboardPage() {
       try {
         const res: any = await apiClient.get('/tournaments');
         if (res.success) {
-          // Show fixture button for both 'upcoming' and 'ongoing' tournaments
-          // (admin may have started season before generating fixtures)
           const pending = res.data.find((t: any) => t.status === 'upcoming' || t.status === 'ongoing');
           if (pending) {
             setUpcomingTournament(pending);
             if (pending.status === 'upcoming') {
-              // Only run readiness check for truly upcoming ones
               try {
                 const rRes: any = await apiClient.get(`/tournaments/${pending._id}/readiness`);
                 if (rRes.success) setReadiness(rRes.data);
               } catch (e) {}
             } else {
-              // Ongoing — assume ready (admin already launched it)
               setReadiness({ isReady: true, totalTeams: 28, allTeamsReady: true });
             }
           }
@@ -139,7 +95,7 @@ export default function DashboardPage() {
     setIsModalOpen(true);
   };
 
-  const confirmGenerate = async () => {
+  const onConfirmGenerate = async (numRounds: number, matchesPerDay: number) => {
     if (!upcomingTournament) return;
     
     setIsGenerating(true);
@@ -152,7 +108,6 @@ export default function DashboardPage() {
       if (response.success) {
         toast.success(`Fixtures successfully generated (${numRounds} rounds, ${matchesPerDay} matches/day)!`);
         setUpcomingTournament(prev => prev ? { ...prev, fixturesGenerated: true, currentStage: 'league' } : null);
-        // Refresh stats to show new matches
         const statsRes: any = await apiClient.get('/dashboard/stats');
         if (statsRes.success) setStats(statsRes.data);
       }
@@ -163,33 +118,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handleGenerateKnockout = async (stage: string) => {
-    if (!upcomingTournament) return;
-    
-    setIsGenerating(true);
-    try {
-      const response: any = await apiClient.post(`/tournaments/${upcomingTournament._id}/generate-knockout`, {
-        stage
-      });
-      if (response.success) {
-        toast.success(`Knockout fixtures generated for ${stage.replace('_', ' ')}!`);
-        setUpcomingTournament(prev => prev ? { ...prev, currentStage: stage } : null);
-      }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to generate knockout fixtures');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
-      </div>
-    );
-  }
+  if (isLoading) return <PageSpinner />;
 
   const statCards = [
     { name: 'Total Teams', value: stats?.totalTeams || 0, icon: '🛡️', color: 'text-blue-500' },
@@ -223,12 +152,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Action Center */}
         <div className="rounded-[40px] border border-white/5 bg-white/[0.01] p-10 backdrop-blur-3xl">
           <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-8 leading-none">Action <span className="text-blue-500">Center.</span></h2>
           <div className="space-y-4">
-
-            {/* Pending Team Registrations */}
             {stats?.pendingTeams && stats.pendingTeams > 0 ? (
               <Link href="/admin/teams" className="flex items-center justify-between p-6 rounded-2xl bg-yellow-500/5 border border-yellow-500/10 hover:bg-yellow-500/10 transition-all group">
                 <div className="flex items-center gap-4">
@@ -246,7 +172,6 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Pending Admin Verification */}
             {stats?.pendingAdmins !== undefined && stats.pendingAdmins > 0 && (
               <Link href="/admin/admins" className="flex items-center justify-between p-6 rounded-2xl bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 transition-all group">
                 <div className="flex items-center gap-4">
@@ -260,7 +185,6 @@ export default function DashboardPage() {
               </Link>
             )}
 
-            {/* Generate Fixtures — shown when there's an active/upcoming tournament */}
             {upcomingTournament ? (
               <div className={`flex flex-col gap-3 p-6 rounded-2xl border transition-all ${
                 upcomingTournament.fixturesGenerated
@@ -269,7 +193,7 @@ export default function DashboardPage() {
                   ? 'bg-blue-500/5 border-blue-500/20'
                   : 'bg-white/[0.02] border-white/5'
               }`}>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-4">
                     {upcomingTournament.fixturesGenerated
                       ? <LockKeyhole className="h-5 w-5 text-neutral-500" />
@@ -319,11 +243,10 @@ export default function DashboardPage() {
                     <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1 italic">Create a new tournament to get started</p>
                   </div>
                 </div>
-                <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all">→</div>
+                <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">→</div>
               </Link>
             )}
 
-            {/* Update Results */}
             <Link href="/admin/matches" className="flex items-center justify-between p-6 rounded-2xl bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-all group">
               <div className="flex items-center gap-4">
                 <span className="text-xl">⚽</span>
@@ -332,12 +255,11 @@ export default function DashboardPage() {
                   <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-1 italic">Submit scores for recent fixtures</p>
                 </div>
               </div>
-              <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all">→</div>
+              <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">→</div>
             </Link>
           </div>
         </div>
 
-        {/* Quick Tools */}
         <div className="rounded-[40px] border border-white/5 bg-white/[0.01] p-10 backdrop-blur-3xl">
           <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-8 leading-none">Quick <span className="text-neutral-500">Tools.</span></h2>
           <div className="grid grid-cols-2 gap-4">
@@ -361,82 +283,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Fixture Configuration Modal */}
-      <Modal 
+      <FixtureConfigModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        title="Fixture Configuration"
-      >
-        <div className="space-y-6">
-          <div className="p-6 rounded-3xl bg-blue-600/5 border border-blue-500/10">
-            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 italic">Scheduling Intelligence</p>
-            <p className="text-sm text-neutral-400 font-medium leading-relaxed">
-              Based on your <span className="text-white font-bold">{venueCount} active venues</span>, each round of 14 matches will be distributed across available slots.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Rounds per Team</label>
-              <input 
-                type="number" 
-                min="1" 
-                max="27"
-                value={numRounds}
-                onChange={(e) => setNumRounds(Math.min(27, Math.max(1, parseInt(e.target.value) || 1)))}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-xl font-black italic tracking-tighter text-white focus:border-blue-500 focus:outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Matches Per Day</label>
-              <input 
-                type="number" 
-                min="1" 
-                max="28"
-                value={matchesPerDay}
-                onChange={(e) => setMatchesPerDay(Math.min(28, Math.max(1, parseInt(e.target.value) || 1)))}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-xl font-black italic tracking-tighter text-white focus:border-blue-500 focus:outline-none transition-all"
-              />
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-              <span>📅 Weekend Policy</span>
-              <span className="text-emerald-500 lowercase tracking-normal">Saturdays & Sundays only</span>
-            </div>
-            <div className="flex justify-between items-center border-t border-white/5 pt-2">
-              <div className="text-left">
-                <p className="text-[9px] font-black text-neutral-600 uppercase">Season Kickoff</p>
-                <p className="text-xs font-bold text-white">{startTime?.toLocaleDateString()}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-black text-neutral-600 uppercase">Grand Finale</p>
-                <p className="text-xs font-bold text-blue-500">{estimatedEndDate?.toLocaleDateString()}</p>
-              </div>
-            </div>
-            <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest text-center italic border-t border-white/5 pt-2">
-              Total {numRounds * 14} matches • {Math.ceil((numRounds * 14) / matchesPerDay)} matchdays
-            </p>
-          </div>
-
-          <div className="flex gap-4 pt-4">
-            <button 
-              onClick={() => setIsModalOpen(false)}
-              className="flex-1 h-14 rounded-2xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={confirmGenerate}
-              className="flex-1 h-14 rounded-2xl bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2"
-            >
-              <CalendarDays className="h-4 w-4" /> Initialize
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={onConfirmGenerate}
+        venueCount={venueCount}
+        startDate={upcomingTournament?.startDate}
+        isGenerating={isGenerating}
+      />
     </div>
   );
 }
-

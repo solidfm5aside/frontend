@@ -5,7 +5,8 @@ import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/use-auth-store';
 import { Plus, CheckCircle2, RefreshCw, CalendarDays, AlertCircle, Flame, Clock, Archive, LockKeyhole } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
+import { PageSpinner } from '@/components/ui/Spinner';
+import { FixtureConfigModal } from '@/components/admin/FixtureConfigModal';
 
 interface Tournament {
   _id: string;
@@ -20,6 +21,7 @@ interface Tournament {
 interface TournamentCardProps {
   tournament: Tournament;
   readiness?: any;
+  stageProgress?: { total: number; completed: number } | null;
   isGenerating: boolean;
   isSuperAdmin: boolean;
   onStatusUpdate: (id: string, status: string) => void;
@@ -27,18 +29,40 @@ interface TournamentCardProps {
   onGenerateKnockout: (id: string, stage: string) => void;
 }
 
+const STAGES = [
+  { key: 'league', label: 'League' },
+  { key: 'playoff', label: 'Playoff' },
+  { key: 'round_of_16', label: 'R16' },
+  { key: 'quarter_finals', label: 'QF' },
+  { key: 'semi_finals', label: 'SF' },
+  { key: 'final', label: 'Final' },
+];
+
+const NEXT_STAGE: Record<string, string> = {
+  league: 'playoff',
+  playoff: 'round_of_16',
+  round_of_16: 'quarter_finals',
+  quarter_finals: 'semi_finals',
+  semi_finals: 'final',
+};
+
 function TournamentCard({
   tournament,
   readiness,
+  stageProgress,
   isGenerating,
   isSuperAdmin,
   onStatusUpdate,
   onGenerateFixtures,
   onGenerateKnockout,
 }: TournamentCardProps) {
+  const currentStageIdx = STAGES.findIndex(s => s.key === tournament.currentStage);
+  const nextStage = NEXT_STAGE[tournament.currentStage];
+  const allCurrentStageDone = stageProgress ? stageProgress.completed === stageProgress.total && stageProgress.total > 0 : false;
+
   return (
     <div className="group rounded-[30px] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-3xl transition-all hover:bg-white/[0.04] hover:border-blue-500/20 relative overflow-hidden">
-      <div className="relative z-10 flex justify-between items-start mb-8">
+      <div className="relative z-10 flex justify-between items-start mb-6">
         <div>
           <span className={`inline-flex px-3 py-1 mb-4 rounded-full text-[9px] font-black uppercase tracking-widest border ${
             tournament.status === 'ongoing' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
@@ -57,6 +81,48 @@ function TournamentCard({
         </div>
       </div>
 
+      {/* Stage Progress Timeline (visible for ongoing tournaments) */}
+      {tournament.status === 'ongoing' && tournament.fixturesGenerated && (
+        <div className="relative z-10 mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/5">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Stage Progress</p>
+            {stageProgress && (
+              <span className={`text-[9px] font-black uppercase tracking-widest ${
+                allCurrentStageDone ? 'text-emerald-500' : 'text-yellow-500'
+              }`}>
+                {stageProgress.completed}/{stageProgress.total} completed
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {STAGES.map((s, idx) => {
+              const isDone = idx < currentStageIdx;
+              const isCurrent = idx === currentStageIdx;
+              const isPending = idx > currentStageIdx;
+              return (
+                <div key={s.key} className="flex items-center gap-1 flex-1">
+                  <div className={`flex-1 flex flex-col items-center gap-1`}>
+                    <div className={`h-2 w-full rounded-full transition-all ${
+                      isDone ? 'bg-emerald-500' :
+                      isCurrent ? 'bg-blue-500' :
+                      'bg-white/10'
+                    }`} />
+                    <span className={`text-[7px] font-black uppercase ${
+                      isDone ? 'text-emerald-500' :
+                      isCurrent ? 'text-blue-400' :
+                      'text-neutral-700'
+                    }`}>{s.label}</span>
+                  </div>
+                  {idx < STAGES.length - 1 && <div className={`w-1.5 h-1.5 rounded-full shrink-0 mb-3 ${
+                    idx < currentStageIdx ? 'bg-emerald-500' : 'bg-white/10'
+                  }`} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 flex flex-col border-t border-white/5 pt-6 gap-4">
         {tournament.status === 'upcoming' && (
           <div className="flex flex-col gap-3">
@@ -71,7 +137,7 @@ function TournamentCard({
                 <CheckCircle2 className="h-4 w-4" /> All 28 teams are ready!
               </div>
             )}
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               {tournament.fixturesGenerated ? (
                 <div className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-neutral-500 border border-white/5">
                   <LockKeyhole className="h-3.5 w-3.5" /> Fixtures Generated
@@ -90,31 +156,6 @@ function TournamentCard({
                   {isGenerating ? 'Generating...' : '1. Generate Fixtures'}
                 </button>
               )}
-              {tournament.fixturesGenerated && tournament.currentStage !== 'final' && (
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const nextStageMap: any = {
-                      'league': 'playoff',
-                      'playoff': 'round_of_16',
-                      'round_of_16': 'quarter_finals',
-                      'quarter_finals': 'semi_finals',
-                      'semi_finals': 'final'
-                    };
-                    const nextStage = nextStageMap[tournament.currentStage] || 'round_of_16';
-                    if (confirm(`Generate fixtures for the ${nextStage.replace(/_/g, ' ')} stage?`)) {
-                      onGenerateKnockout(tournament._id, nextStage);
-                    }
-                  }}
-                  className="px-4 py-2 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-xl transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-blue-500/20"
-                  title="Generate Next Phase"
-                >
-                  <Flame className="h-3.5 w-3.5" />
-                  {tournament.currentStage === 'league' ? 'Gen Playoffs' : 
-                   tournament.currentStage === 'playoff' ? 'Gen R16' : 'Next Phase'}
-                </button>
-              )}
-
               <button 
                 onClick={() => onStatusUpdate(tournament._id, 'ongoing')}
                 className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white"
@@ -124,10 +165,47 @@ function TournamentCard({
             </div>
           </div>
         )}
+
+        {/* Knockout Stage Generator — visible for ongoing tournaments */}
+        {tournament.status === 'ongoing' && tournament.fixturesGenerated && nextStage && (
+          <div className="flex flex-col gap-2">
+            {!allCurrentStageDone && stageProgress && (
+              <div className="flex items-center gap-2 rounded-xl bg-yellow-500/10 p-3 text-[10px] font-bold text-yellow-400 border border-yellow-500/20">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {stageProgress.total - stageProgress.completed} match(es) in{' '}
+                  <span className="uppercase">{tournament.currentStage.replace(/_/g, ' ')}</span>{' '}
+                  still pending before advancing.
+                </span>
+              </div>
+            )}
+            {allCurrentStageDone && (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                <span>All <span className="uppercase">{tournament.currentStage.replace(/_/g, ' ')}</span> matches complete — ready to generate <span className="uppercase">{nextStage.replace(/_/g, ' ')}</span>!</span>
+              </div>
+            )}
+            {isSuperAdmin && (
+              <button
+                disabled={!allCurrentStageDone || isGenerating}
+                onClick={() => {
+                  if (confirm(`Generate ${nextStage.replace(/_/g, ' ')} fixtures?`)) {
+                    onGenerateKnockout(tournament._id, nextStage);
+                  }
+                }}
+                className="flex items-center justify-center gap-2 rounded-xl py-3 text-[10px] font-black uppercase tracking-widest transition-all border bg-blue-600/10 text-blue-400 border-blue-500/20 hover:bg-blue-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Flame className="h-3.5 w-3.5" />
+                Generate {nextStage.replace(/_/g, ' ')}
+              </button>
+            )}
+          </div>
+        )}
+
         {tournament.status === 'ongoing' && (
           <button
             onClick={() => { if (confirm('Mark this season as completed?')) onStatusUpdate(tournament._id, 'completed'); }}
-            className="flex items-center justify-center gap-2 rounded-xl bg-blue-600/10 py-3 text-[10px] font-black uppercase tracking-widest text-blue-500 transition-all hover:bg-blue-600 hover:text-white"
+            className="flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:bg-red-600/10 hover:text-red-400 border border-white/5"
           >
             <CheckCircle2 className="h-4 w-4" /> Mark Completed
           </button>
@@ -149,6 +227,7 @@ function TournamentCard({
 export default function TournamentsManagementPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [readiness, setReadiness] = useState<Record<string, any>>({});
+  const [stageProgress, setStageProgress] = useState<Record<string, { total: number; completed: number }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -156,54 +235,13 @@ export default function TournamentsManagementPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTourneyId, setSelectedTourneyId] = useState<string | null>(null);
-  const [numRounds, setNumRounds] = useState(6);
-  const [matchesPerDay, setMatchesPerDay] = useState(7);
   const [venueCount, setVenueCount] = useState(0);
 
   const { admin } = useAuthStore();
   const isSuperAdmin = admin?.role === 'super_admin';
 
-  const calculateEndDate = () => {
-    const tournament = tournaments.find(t => t._id === selectedTourneyId);
-    if (!tournament) return null;
-    
-    const totalMatches = numRounds * 14;
-    const totalDaysNeeded = Math.ceil(totalMatches / matchesPerDay);
-    
-    let currentDate = new Date(tournament.startDate);
-    const day = currentDate.getUTCDay();
-    const diff = (6 - day + 7) % 7;
-    currentDate.setUTCDate(currentDate.getUTCDate() + diff);
-    
-    let daysCount = 1;
-    let isSat = true;
-    
-    while (daysCount < totalDaysNeeded) {
-      if (isSat) {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-        isSat = false;
-      } else {
-        currentDate.setUTCDate(currentDate.getUTCDate() + 6);
-        isSat = true;
-      }
-      daysCount++;
-    }
-    
-    return currentDate;
-  };
-
-  const estimatedEndDate = calculateEndDate();
-  const startTime = (() => {
-    const tournament = tournaments.find(t => t._id === selectedTourneyId);
-    if (!tournament) return null;
-    const d = new Date(tournament.startDate);
-    const diff = (6 - d.getUTCDay() + 7) % 7;
-    d.setUTCDate(d.getUTCDate() + diff);
-    return d;
-  })();
-
-  const fetchTournaments = async () => {
-    setIsLoading(true);
+  const fetchTournaments = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const response: any = await apiClient.get('/tournaments');
       if (response.success) {
@@ -218,11 +256,27 @@ export default function TournamentsManagementPage() {
           }
         }
         setReadiness(rData);
+
+        const pData: Record<string, any> = {};
+        for (const t of response.data) {
+          if (t.status === 'ongoing') {
+            try {
+              const mRes: any = await apiClient.get(`/matches?tournamentId=${t._id}&stage=${t.currentStage}`);
+              if (mRes.success) {
+                pData[t._id] = {
+                  total: mRes.data.length,
+                  completed: mRes.data.filter((m: any) => m.status === 'completed').length
+                };
+              }
+            } catch (e) {}
+          }
+        }
+        setStageProgress(pData);
       }
     } catch (error) {
       toast.error('Failed to fetch tournaments');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -254,19 +308,19 @@ export default function TournamentsManagementPage() {
   };
 
   const handleGenerateKnockout = async (tournamentId: string, stage: string) => {
-    setIsLoading(true);
+    setIsGenerating(tournamentId);
     try {
       const response: any = await apiClient.post(`/tournaments/${tournamentId}/generate-knockout`, {
         stage
       });
       if (response.success) {
         toast.success(`Knockout fixtures generated for ${stage.replace('_', ' ')}!`);
-        fetchTournaments();
+        fetchTournaments(true);
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to generate knockout fixtures');
     } finally {
-      setIsLoading(false);
+      setIsGenerating(null);
     }
   };
 
@@ -275,7 +329,7 @@ export default function TournamentsManagementPage() {
       const response: any = await apiClient.patch(`/tournaments/${id}`, { status });
       if (response.success) {
         toast.success(`Season status updated to ${status}`);
-        fetchTournaments();
+        fetchTournaments(true);
       }
     } catch (error) {
       toast.error('Failed to update status');
@@ -287,7 +341,7 @@ export default function TournamentsManagementPage() {
     setIsModalOpen(true);
   };
 
-  const confirmGenerate = async () => {
+  const onConfirmGenerate = async (numRounds: number, matchesPerDay: number) => {
     if (!selectedTourneyId) return;
 
     setIsGenerating(selectedTourneyId);
@@ -299,7 +353,7 @@ export default function TournamentsManagementPage() {
       });
       if (response.success) {
         toast.success(`Fixtures successfully generated (${numRounds} rounds, ${matchesPerDay} matches/day)!`);
-        fetchTournaments();
+        fetchTournaments(true);
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to generate fixtures');
@@ -313,13 +367,7 @@ export default function TournamentsManagementPage() {
   const upcoming = tournaments.filter(t => t.status === 'upcoming');
   const completed = tournaments.filter(t => t.status === 'completed');
 
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
-      </div>
-    );
-  }
+  if (isLoading) return <PageSpinner />;
 
   const SectionHeader = ({ icon, label, count, color }: { icon: React.ReactNode; label: string; count: number; color: string }) => (
     <div className={`flex items-center gap-3 mb-6`}>
@@ -347,7 +395,7 @@ export default function TournamentsManagementPage() {
       {isCreating && (
         <div className="rounded-[40px] border border-blue-500/20 bg-blue-500/5 p-8 backdrop-blur-3xl animate-reveal">
           <h2 className="text-xl font-black italic tracking-tighter text-white uppercase mb-6">New Season Initializer</h2>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+          <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 items-end">
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tournament Name</label>
               <input type="text" required value={newTournament.name} onChange={(e) => setNewTournament({ ...newTournament, name: e.target.value })} placeholder="e.g. SolidFM 5-Aside" className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-sm font-bold text-white focus:border-blue-500 focus:outline-none" />
@@ -374,7 +422,7 @@ export default function TournamentsManagementPage() {
           <SectionHeader icon={<Flame className="h-4 w-4 text-emerald-500" />} label="Active Season" count={ongoing.length} color="bg-emerald-500/10" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {ongoing.map(t => (
-              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} isGenerating={isGenerating === t._id} isSuperAdmin={isSuperAdmin} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
+              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} stageProgress={stageProgress[t._id]} isGenerating={isGenerating === t._id} isSuperAdmin={isSuperAdmin} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
             ))}
           </div>
         </section>
@@ -386,7 +434,7 @@ export default function TournamentsManagementPage() {
           <SectionHeader icon={<Clock className="h-4 w-4 text-yellow-500" />} label="Upcoming / Pending" count={upcoming.length} color="bg-yellow-500/10" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {upcoming.map(t => (
-              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} isGenerating={isGenerating === t._id} isSuperAdmin={isSuperAdmin} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
+              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} stageProgress={stageProgress[t._id]} isGenerating={isGenerating === t._id} isSuperAdmin={isSuperAdmin} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
             ))}
           </div>
         </section>
@@ -398,7 +446,7 @@ export default function TournamentsManagementPage() {
           <SectionHeader icon={<Archive className="h-4 w-4 text-blue-400" />} label="Past Editions" count={completed.length} color="bg-blue-500/10" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {completed.map(t => (
-              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} isGenerating={isGenerating === t._id} isSuperAdmin={isSuperAdmin} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
+              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} stageProgress={stageProgress[t._id]} isGenerating={isGenerating === t._id} isSuperAdmin={isSuperAdmin} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
             ))}
           </div>
         </section>
@@ -410,88 +458,17 @@ export default function TournamentsManagementPage() {
         </div>
       )}
 
-      {/* Fixture Configuration Modal */}
-      <Modal 
+      <FixtureConfigModal 
         isOpen={isModalOpen} 
         onClose={() => {
           setIsModalOpen(false);
           setSelectedTourneyId(null);
         }} 
-        title="Fixture Configuration"
-      >
-        <div className="space-y-6">
-          <div className="p-6 rounded-3xl bg-blue-600/5 border border-blue-500/10">
-            <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 italic">Scheduling Intelligence</p>
-            <p className="text-sm text-neutral-400 font-medium leading-relaxed">
-              Based on your <span className="text-white font-bold">{venueCount} active venues</span>, each round of 14 matches will be distributed across available slots.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Rounds per Team</label>
-              <input 
-                type="number" 
-                min="1" 
-                max="27"
-                value={numRounds}
-                onChange={(e) => setNumRounds(Math.min(27, Math.max(1, parseInt(e.target.value) || 1)))}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-xl font-black italic tracking-tighter text-white focus:border-blue-500 focus:outline-none transition-all"
-              />
-            </div>
-            <div className="space-y-3">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Matches Per Day</label>
-              <input 
-                type="number" 
-                min="1" 
-                max="28"
-                value={matchesPerDay}
-                onChange={(e) => setMatchesPerDay(Math.min(28, Math.max(1, parseInt(e.target.value) || 1)))}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-xl font-black italic tracking-tighter text-white focus:border-blue-500 focus:outline-none transition-all"
-              />
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-2">
-            <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-              <span>📅 Weekend Policy</span>
-              <span className="text-emerald-500 lowercase tracking-normal">Saturdays & Sundays only</span>
-            </div>
-            <div className="flex justify-between items-center border-t border-white/5 pt-2">
-              <div className="text-left">
-                <p className="text-[9px] font-black text-neutral-600 uppercase">Season Kickoff</p>
-                <p className="text-xs font-bold text-white">{startTime?.toLocaleDateString()}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] font-black text-neutral-600 uppercase">Grand Finale</p>
-                <p className="text-xs font-bold text-blue-500">{estimatedEndDate?.toLocaleDateString()}</p>
-              </div>
-            </div>
-            <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest text-center italic border-t border-white/5 pt-2">
-              Total {numRounds * 14} matches • {Math.ceil((numRounds * 14) / matchesPerDay)} matchdays
-            </p>
-          </div>
-
-          <div className="flex gap-4 pt-4">
-            <button 
-              onClick={() => {
-                setIsModalOpen(false);
-                setSelectedTourneyId(null);
-              }}
-              className="flex-1 h-14 rounded-2xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/10 transition-all"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={confirmGenerate}
-              className="flex-1 h-14 rounded-2xl bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2"
-            >
-              <CalendarDays className="h-4 w-4" /> Initialize
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={onConfirmGenerate}
+        venueCount={venueCount}
+        startDate={tournaments.find(t => t._id === selectedTourneyId)?.startDate}
+        isGenerating={!!isGenerating}
+      />
     </div>
   );
 }
-

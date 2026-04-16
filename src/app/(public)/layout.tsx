@@ -1,4 +1,5 @@
 import Header from '@/components/Header';
+import AnnouncementBar from '@/components/AnnouncementBar';
 
 export default function PublicLayout({
   children,
@@ -7,6 +8,7 @@ export default function PublicLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
+      <AnnouncementBar />
       <Header />
       <main className="flex-1">
         {children}
