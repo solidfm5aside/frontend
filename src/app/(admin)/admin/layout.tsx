@@ -6,23 +6,20 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/use-auth-store';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { admin, logout } = useAuthStore();
+  const { admin, logout, hasHydrated } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
-  const [isHydrated, setIsHydrated] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
 
   // Close sidebar when route changes on mobile
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
 
+
+
   useEffect(() => {
-    if (isHydrated) {
+    if (hasHydrated) {
       if (!admin) {
         router.push('/login');
       } else if (admin.role !== 'admin' && admin.role !== 'super_admin') {
@@ -30,15 +27,49 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.push('/');
       }
     }
-  }, [isHydrated, admin, router]);
+  }, [hasHydrated, admin, router]);
 
-  if (!isHydrated || !admin) {
+
+  if (!hasHydrated || !admin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
       </div>
     );
   }
+
+  // Handle Unverified Admins (Pending Approval State)
+  if (admin && admin.isVerified === false) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-black px-6 text-center font-outfit relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+        
+        <div className="relative z-10 max-w-md w-full animate-reveal">
+           <div className="inline-flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-600/10 border border-blue-500/20 text-3xl mb-8">
+              ⏳
+           </div>
+           <h1 className="text-4xl font-black italic tracking-tighter text-white uppercase mb-4">Account <span className="text-blue-500 not-italic">Pending.</span></h1>
+           <p className="text-sm font-bold text-neutral-500 uppercase tracking-widest leading-loose mb-12 italic">
+              Welcome to the team, {admin.name.split(' ')[0]}.<br/>
+              Your admin access is currently in the "Review" queue. A Super Admin will verify your credentials shortly.
+           </p>
+           
+           <div className="space-y-4">
+              <Link href="/" className="flex w-full h-16 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-neutral-400 hover:text-white hover:bg-white/10 transition-all">
+                 ← Return to Public Site
+              </Link>
+              <button 
+                onClick={() => { logout(); router.push('/login'); }}
+                className="flex w-full h-16 items-center justify-center rounded-2xl text-[10px] font-black uppercase tracking-widest text-red-500/50 hover:text-red-500 transition-all italic underline underline-offset-8 decoration-red-500/20"
+              >
+                Sign out & Try again
+              </button>
+           </div>
+        </div>
+      </div>
+    );
+  }
+
 
   const navLinks = [
     { name: 'Overview', href: '/admin/dashboard', icon: '📊' },
@@ -56,7 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen bg-[#050505] font-outfit text-white">
+    <div className="flex h-screen overflow-hidden bg-[#050505] font-outfit text-white">
       {/* Mobile Backdrop */}
       {isSidebarOpen && (
         <div 

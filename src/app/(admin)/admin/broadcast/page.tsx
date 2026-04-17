@@ -2,22 +2,37 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import apiClient from '@/lib/api-client';
 
 export default function BroadcastPage() {
   const [message, setMessage] = useState('');
+  const [subject, setSubject] = useState('Tournament Update - CodeJude Football');
   const [isSending, setIsSending] = useState(false);
 
-  const handleBroadcast = (e: React.FormEvent) => {
+  const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
 
     setIsSending(true);
-    // Stub implementation
-    setTimeout(() => {
+    try {
+      const response: any = await apiClient.post('/broadcast', { 
+        message, 
+        subject 
+      });
+      
+      if (response.success) {
+        toast.success('Broadcast transmitted successfully', {
+          description: response.message
+        });
+        setMessage('');
+      }
+    } catch (error: any) {
+      toast.error('Transmission Failed', {
+        description: error.message || 'Could not send broadcast. Check your SMTP settings.'
+      });
+    } finally {
       setIsSending(false);
-      setMessage('');
-      toast.success('Broadcast sent to all coaches and organizers');
-    }, 1500);
+    }
   };
 
   return (
@@ -37,34 +52,53 @@ export default function BroadcastPage() {
              </div>
              <div>
                 <h3 className="text-lg md:text-2xl font-black italic tracking-tighter text-white uppercase mb-2 leading-none">Global Notification</h3>
-                <p className="text-sm text-neutral-400 leading-relaxed font-medium">Use this tool to push notifications to team dashboards and registered emails.</p>
+                <p className="text-sm text-neutral-400 leading-relaxed font-medium">This tool will send an email blast to all registered Team Captains and Staff immediately.</p>
              </div>
           </div>
 
-          <form onSubmit={handleBroadcast} className="space-y-6">
-             <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Compose Message</label>
-                <textarea
-                  required
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="e.g. Due to severe weather, Phase 2 matches are delayed..."
-                  className="w-full h-40 rounded-3xl border border-white/10 bg-black/50 px-6 py-5 text-sm font-bold text-white transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
-                />
+          <form onSubmit={handleBroadcast} className="space-y-8">
+             <div className="space-y-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Email Subject</label>
+                  <input
+                    type="text"
+                    required
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Subject of the email..."
+                    className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-sm font-bold text-white transition-all focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Compose Message</label>
+                  <textarea
+                    required
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="e.g. Due to severe weather, Phase 2 matches are delayed..."
+                    className="w-full h-48 rounded-3xl border border-white/10 bg-black/50 px-6 py-5 text-sm font-bold text-white transition-all focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
+                  />
+                </div>
              </div>
              
-             <div className="flex items-center gap-4 border-t border-white/5 pt-6 mt-6">
-                <div className="flex items-center gap-3 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-4 py-3 rounded-xl flex-1">
-                   <span className="text-sm">⚠️</span>
-                   <span className="text-[9px] font-black uppercase tracking-[0.2em] italic">Alert: This will notify all registered users immediately.</span>
+             <div className="flex items-center gap-4 border-t border-white/5 pt-8 mt-4">
+                <div className="flex items-center gap-3 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 px-6 py-4 rounded-2xl flex-1">
+                   <span className="text-lg">⚠️</span>
+                   <span className="text-[9px] font-black uppercase tracking-[0.2em] italic leading-tight">Proceed with caution. This will trigger a bulk email event to every team captain in the database.</span>
                 </div>
                 
                 <button
                   type="submit"
                   disabled={!message.trim() || isSending}
-                  className="shrink-0 h-[52px] px-10 rounded-2xl bg-blue-600 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 shadow-lg shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="shrink-0 h-[64px] px-12 rounded-2xl bg-blue-600 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 shadow-xl shadow-blue-600/20 disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
                 >
-                  {isSending ? 'Transmitting...' : 'Issue Alert'}
+                  <span className={isSending ? 'opacity-0' : 'opacity-100'}>Send Broadcast</span>
+                  {isSending && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white"></div>
+                    </div>
+                  )}
                 </button>
              </div>
           </form>

@@ -6,61 +6,28 @@ import { User, Medal } from 'lucide-react';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
-
-interface Tournament {
-  _id: string;
-  name: string;
-  season: string;
-  currentStage: string;
-}
-
-interface TeamStats {
-  teamId: {
-    _id: string;
-    name: string;
-    logo?: string;
-  };
-  played: number;
-  won: number;
-  drawn: number;
-  lost: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  goalDifference: number;
-  points: number;
-  form: string[];
-}
-
-interface Scorer {
-  playerId: {
-    _id: string;
-    name: string;
-  };
-  teamId: {
-    _id: string;
-    name: string;
-    logo?: string;
-  };
-  goals: number;
-  assists: number;
-}
+import { Tournament, TeamStanding, PlayerStats, ApiResponse } from '@/types';
 
 type TabType = 'table' | 'statistics';
+
 
 export default function StandingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('table');
   const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
-  const [standings, setStandings] = useState<TeamStats[]>([]);
-  const [topScorers, setTopScorers] = useState<Scorer[]>([]);
+  const [standings, setStandings] = useState<TeamStanding[]>([]);
+  const [topScorers, setTopScorers] = useState<PlayerStats[]>([]);
+
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [standingsRes, scorersRes]: any = await Promise.all([
-          apiClient.get('/standings'),
-          apiClient.get('/standings/top-scorers')
+        const [standingsRes, scorersRes] = await Promise.all([
+          apiClient.get('/standings') as Promise<ApiResponse<any[]>>,
+          apiClient.get('/standings/top-scorers') as Promise<ApiResponse<PlayerStats[]>>
         ]);
+
+
 
         if (standingsRes.success && standingsRes.data.length > 0) {
           setActiveTournament(standingsRes.data[0].tournamentId);

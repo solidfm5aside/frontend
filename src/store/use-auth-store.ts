@@ -1,13 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-interface AuthState {
-  admin: any | null;
-  accessToken: string | null;
-  refreshToken: string | null;
-  setAuth: (admin: any, accessToken: string, refreshToken: string) => void;
-  logout: () => void;
-}
+import { AuthState } from '@/types';
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -15,13 +8,15 @@ export const useAuthStore = create<AuthState>()(
       admin: null,
       accessToken: null,
       refreshToken: null,
+      hasHydrated: false,
       setAuth: (admin, accessToken, refreshToken) => {
         // Set cookie for middleware (server-side)
         if (typeof document !== 'undefined') {
           document.cookie = `token=${accessToken}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
         }
-        set({ admin, accessToken, refreshToken });
+        set({ admin, accessToken, refreshToken, hasHydrated: true });
       },
+      setHasHydrated: (val) => set({ hasHydrated: val }),
       logout: () => {
         // Remove cookie for middleware
         if (typeof document !== 'undefined') {
@@ -32,6 +27,9 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

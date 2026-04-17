@@ -8,26 +8,10 @@ import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
+import { Match, Team, ApiResponse } from '@/types';
 
-interface Team {
-  _id: string;
-  name: string;
-  logo?: string;
-}
 
-interface Match {
-  _id: string;
-  homeTeam: Team;
-  awayTeam: Team;
-  homeScore: number;
-  awayScore: number;
-  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
-  stage: string;
-  date: string;
-  venue?: string;
-  isExtraTime?: boolean;
-  shootoutScore?: { home: number; away: number };
-}
+
 
 export default function FixturesClient() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -48,8 +32,9 @@ export default function FixturesClient() {
   const fetchMatches = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const response: any = await apiClient.get('/matches');
+      const response: ApiResponse<Match[]> = await apiClient.get('/matches');
       if (response.success) {
+
         setMatches(response.data);
       }
     } catch (error) {

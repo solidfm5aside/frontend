@@ -8,32 +8,10 @@ import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
+import { Match, MatchEvent, ApiResponse } from '@/types';
 
-interface Team {
-  _id: string;
-  name: string;
-  logo?: string;
-}
 
-interface MatchEvent {
-  type: 'goal' | 'yellow_card' | 'red_card' | 'substitution';
-  minute: number;
-  playerId: { _id: string; name: string };
-  teamId: string;
-}
 
-interface Match {
-  _id: string;
-  homeTeam: Team;
-  awayTeam: Team;
-  homeScore: number;
-  awayScore: number;
-  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
-  date: string;
-  venue?: string;
-  events: MatchEvent[];
-  stage: string;
-}
 
 export default function ResultsClient() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -42,9 +20,10 @@ export default function ResultsClient() {
 
   const fetchMatches = async () => {
     try {
-      const response: any = await apiClient.get('/matches');
+      const response: ApiResponse<Match[]> = await apiClient.get('/matches');
       if (response.success) {
         const completed = response.data
+
           .filter((m: Match) => m.status === 'completed')
           .sort((a: Match, b: Match) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setMatches(completed);

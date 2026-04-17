@@ -27,7 +27,7 @@ export default function LoginPage() {
       const response: any = await apiClient.post('/auth/login', { email, password });
       if (response.success) {
         setAuth(response.data.admin, response.data.accessToken, response.data.refreshToken);
-        router.replace(from);
+        window.location.href = from;
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');

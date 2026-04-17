@@ -4,34 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Trophy, Clock, Flame, Check, Square } from 'lucide-react';
+import { Match, MatchEvent, Player, ApiResponse } from '@/types';
 
-interface Player {
-  _id: string;
-  name: string;
-}
 
-interface MatchEvent {
-  _id: string;
-  type: 'goal' | 'yellow_card' | 'red_card' | 'substitution';
-  minute: number;
-  playerId: { _id: string; name: string };
-  assistPlayerId?: { _id: string; name: string };
-  teamId: string;
-}
 
-interface Match {
-  _id: string;
-  homeTeam: { _id: string; name: string; logo?: string };
-  awayTeam: { _id: string; name: string; logo?: string };
-  homeScore: number;
-  awayScore: number;
-  status: string;
-  stage: string;
-  isExtraTime?: boolean;
-  winner?: string | { _id: string; name: string };
-  shootoutScore?: { home: number; away: number };
-  events: MatchEvent[];
-}
 
 interface MatchControllerModalProps {
   matchId: string;
@@ -86,7 +62,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
   const fetchMatchDetails = async () => {
     try {
-      const resp: any = await apiClient.get(`/matches?matchId=${matchId}`);
+      const resp: ApiResponse<any> = await apiClient.get(`/matches?matchId=${matchId}`);
       const m = Array.isArray(resp.data)
         ? resp.data.find((item: any) => item._id === matchId)
         : resp.data;
@@ -97,6 +73,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         setHomeScore(m.homeScore ?? 0);
         setAwayScore(m.awayScore ?? 0);
         setMatchStatus(m.status);
+
 
         const homeId = m.homeTeam?._id || '';
         const awayId = m.awayTeam?._id || '';
