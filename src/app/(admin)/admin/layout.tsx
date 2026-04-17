@@ -18,19 +18,39 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
 
 
+  const isAdminPath = pathname === '/admin';
+
   useEffect(() => {
     if (hasHydrated) {
       if (!admin) {
-        router.push('/login');
+        if (!isAdminPath) {
+          router.push('/login');
+        }
       } else if (admin.role !== 'admin' && admin.role !== 'super_admin') {
         // Logged in but not an admin (e.g., viewer)
         router.push('/');
+      } else if (isAdminPath && admin.isVerified) {
+        // Logged in as verified admin and on landing page, go to dashboard
+        router.push('/admin/dashboard');
       }
     }
-  }, [hasHydrated, admin, router]);
+  }, [hasHydrated, admin, router, isAdminPath]);
 
+  if (!hasHydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
+      </div>
+    );
+  }
 
-  if (!hasHydrated || !admin) {
+  // If on public admin landing page and not logged in, show children without sidebar
+  if (isAdminPath && !admin) {
+    return <>{children}</>;
+  }
+
+  // If not logged in and not on public admin page, show loader while redirecting
+  if (!admin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
