@@ -2,15 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Server-side auth middleware.
+ * Server-side Edge Proxy (formerly Middleware).
  * Protects /admin/* routes before the page renders, eliminating the
  * client-side hydration flash that previously occurred on unauthorized access.
  *
- * Reads the presence of an auth token from cookies. The actual token
- * validation happens in the API; this guard just prevents unauthenticated
- * users from even seeing the admin shell.
+ * This version follows the Next.js 16 'proxy' convention.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Only protect admin routes
