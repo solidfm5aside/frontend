@@ -1,5 +1,9 @@
 'use client';
 
+import { useState } from 'react';
+import Image from 'next/image';
+import { isOptimizableImageUrl } from '@/lib/image-url';
+
 /**
  * TeamAvatar — Shared team display component.
  * Shows the uploaded team logo if available, otherwise falls back to
@@ -22,18 +26,34 @@ const RESPONSIVE_SIZE_MAP = {
   lg: 'h-12 w-12 sm:h-16 sm:w-16 md:h-28 md:w-28 rounded-2xl md:rounded-[40px] text-xl md:text-4xl',
 };
 
+const IMAGE_SIZE_MAP = {
+  xs: '24px',
+  sm: '(max-width: 639px) 44px, (max-width: 767px) 56px, 64px',
+  md: '(max-width: 639px) 48px, (max-width: 767px) 64px, 80px',
+  lg: '(max-width: 639px) 48px, (max-width: 767px) 64px, 112px',
+};
+
 export function TeamAvatar({ name, logo, size = 'md', className = '' }: TeamAvatarProps) {
   const sizeClasses = RESPONSIVE_SIZE_MAP[size];
   const letter = name?.charAt(0) ?? '?';
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const showLogo = isOptimizableImageUrl(logo) && failedLogo !== logo;
 
   return (
     <div
-      className={`${sizeClasses} bg-white/[0.03] border border-white/10 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform shadow-2xl shadow-black/50 ${className}`}
+      className={`${sizeClasses} relative bg-white/[0.03] border border-white/10 flex items-center justify-center overflow-hidden shrink-0 group-hover:scale-105 transition-transform motion-reduce:transform-none shadow-2xl shadow-black/50 ${className}`}
     >
-      {logo ? (
-        <img src={logo} alt={name ?? 'Team'} className="h-full w-full object-cover" />
+      {showLogo ? (
+        <Image
+          src={logo as string}
+          alt={`${name ?? 'Team'} logo`}
+          fill
+          sizes={IMAGE_SIZE_MAP[size]}
+          className="object-cover"
+          onError={() => setFailedLogo(logo ?? null)}
+        />
       ) : (
-        <span className="font-black text-neutral-700 italic">{letter}</span>
+        <span className="font-black text-neutral-700 italic" aria-label={`${name ?? 'Team'} logo unavailable`}>{letter}</span>
       )}
     </div>
   );

@@ -37,7 +37,7 @@ export function calculateFixtureEndDate(
   const totalMatches = numRounds * 14;
   const totalDaysNeeded = Math.ceil(totalMatches / matchesPerDay);
 
-  let currentDate = new Date(startDate);
+  const currentDate = new Date(startDate);
   // Fast-forward to the first Saturday
   const day = currentDate.getUTCDay();
   const diff = (6 - day + 7) % 7;

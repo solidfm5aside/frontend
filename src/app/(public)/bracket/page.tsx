@@ -1,106 +1,181 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { ChevronDown, Trophy } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import KnockoutBracket from '@/components/KnockoutBracket';
-import { Trophy, ChevronDown } from 'lucide-react';
+import { PageSpinner } from '@/components/ui/Spinner';
 
 interface Tournament {
   _id: string;
   name: string;
   season: string;
+  startDate: string;
   currentStage: string;
+  status?: 'upcoming' | 'ongoing' | 'completed';
+  formatVersion?: 1 | 2;
+  format?: 'legacy_league' | 'two_group_knockout';
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
+interface TournamentResult {
+  requestKey: number;
+  tournaments: Tournament[];
+  error: string | null;
+}
+
+function formatStageName(stage: string) {
+  return stage.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function chooseBracketTournament(tournaments: Tournament[]) {
+  const newest = (status: Tournament['status']) => tournaments
+    .filter((tournament) => tournament.status === status)
+    .sort((left, right) => new Date(right.startDate).getTime() - new Date(left.startDate).getTime())[0];
+
+  return newest('ongoing') ?? newest('completed') ?? newest('upcoming') ?? tournaments[0];
 }
 
 export default function BracketPage() {
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState('');
+  const [requestKey, setRequestKey] = useState(0);
+  const [result, setResult] = useState<TournamentResult>({
+    requestKey: -1,
+    tournaments: [],
+    error: null,
+  });
 
   useEffect(() => {
-    fetchTournaments();
-  }, []);
+    const controller = new AbortController();
 
-  const fetchTournaments = async () => {
-    try {
-      const resp: any = await apiClient.get('/tournaments');
-      if (resp.success) {
-        setTournaments(resp.data);
-        // Default to the first one that is ongoing or the latest
-        const ongoing = resp.data.find((t: any) => t.status === 'ongoing');
-        if (ongoing) setSelectedId(ongoing._id);
-        else if (resp.data.length > 0) setSelectedId(resp.data[0]._id);
+    const fetchTournaments = async () => {
+      try {
+        const response = await apiClient.get('/tournaments', {
+          signal: controller.signal,
+        }) as unknown as ApiResponse<Tournament[]>;
+
+        if (!response.success) {
+          throw new Error(response.message || 'The tournaments could not be loaded.');
+        }
+
+        const tournaments = Array.isArray(response.data) ? response.data : [];
+        setResult({ requestKey, tournaments, error: null });
+        setSelectedId((currentId) => {
+          if (tournaments.some((tournament) => tournament._id === currentId)) return currentId;
+          return chooseBracketTournament(tournaments)?._id ?? '';
+        });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setResult({
+          requestKey,
+          tournaments: [],
+          error: error instanceof Error ? error.message : 'The tournaments could not be loaded.',
+        });
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  const selectedTournament = tournaments.find(t => t._id === selectedId);
+    void fetchTournaments();
+    return () => controller.abort();
+  }, [requestKey]);
 
-  if (isLoading) return null;
+  if (result.requestKey !== requestKey) return <PageSpinner />;
+
+  if (result.error) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 md:py-32">
+        <Trophy aria-hidden="true" className="mx-auto mb-6 h-12 w-12 text-neutral-800" />
+        <h1 className="mb-3 text-2xl font-black uppercase tracking-tight text-white italic">Bracket unavailable</h1>
+        <p className="mb-8 text-sm text-neutral-500">{result.error}</p>
+        <button
+          type="button"
+          onClick={() => setRequestKey((key) => key + 1)}
+          className="min-h-11 rounded-2xl bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const selectedTournament = result.tournaments.find((tournament) => tournament._id === selectedId);
+  const isFixedCompetition = selectedTournament?.formatVersion === 2 &&
+    selectedTournament.format === 'two_group_knockout';
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-12 md:py-20 font-outfit animate-reveal">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16 border-b border-white/5 pb-12">
+    <div className="mx-auto max-w-7xl px-4 py-12 font-outfit animate-reveal sm:px-6 md:py-20">
+      <div className="mb-12 flex flex-col justify-between gap-8 border-b border-white/5 pb-10 md:mb-16 md:flex-row md:items-end md:pb-12">
         <div>
-           <div className="flex items-center gap-3 mb-4">
-              <div className="h-1 bg-blue-600 w-12 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
-              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500">Live Bracket</span>
-           </div>
-           <h1 className="text-5xl md:text-7xl font-black italic tracking-tighter text-white uppercase leading-none">
-             Knockout <br/> <span className="text-blue-600">Roadmap.</span>
-           </h1>
+          <div className="mb-4 flex items-center gap-3">
+            <div aria-hidden="true" className="h-1 w-12 rounded-full bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500">Live Bracket</span>
+          </div>
+          <h1 className="text-4xl font-black uppercase leading-none tracking-tighter text-white italic sm:text-5xl md:text-7xl">
+            Knockout <br /> <span className="text-blue-600">Roadmap.</span>
+          </h1>
         </div>
 
-        <div className="relative group shrink-0">
-           <select 
-             value={selectedId}
-             onChange={(e) => setSelectedId(e.target.value)}
-             className="appearance-none bg-white/5 border border-white/10 rounded-2xl px-8 py-5 pr-14 text-xs font-black uppercase tracking-widest text-white focus:outline-none focus:border-blue-500 transition-all cursor-pointer min-w-[280px]"
-           >
-             {tournaments.map(t => (
-               <option key={t._id} value={t._id} className="bg-black text-white">
-                 {t.name} (S{t.season})
-               </option>
-             ))}
-           </select>
-           <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500 group-hover:text-blue-500 transition-colors pointer-events-none" />
-        </div>
+        {result.tournaments.length > 0 && (
+          <div className="group relative w-full shrink-0 sm:w-auto">
+            <label htmlFor="bracket-tournament" className="sr-only">Choose tournament</label>
+            <select
+              id="bracket-tournament"
+              value={selectedId}
+              onChange={(event) => setSelectedId(event.target.value)}
+              className="min-h-14 w-full cursor-pointer appearance-none rounded-2xl border border-white/10 bg-white/5 px-5 py-4 pr-12 text-xs font-black uppercase tracking-widest text-white transition-all focus:border-blue-500 focus:outline-none sm:min-w-[280px] sm:px-8 sm:py-5 sm:pr-14"
+            >
+              {result.tournaments.map((tournament) => (
+                <option key={tournament._id} value={tournament._id} className="bg-black text-white">
+                  {tournament.name} (S{tournament.season})
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500 transition-colors group-hover:text-blue-500 sm:right-6" />
+          </div>
+        )}
       </div>
 
-      {selectedId && (
+      {selectedId ? (
         <KnockoutBracket tournamentId={selectedId} />
+      ) : (
+        <div className="rounded-[32px] border border-white/5 bg-white/[0.01] px-6 py-20 text-center sm:rounded-[40px]">
+          <Trophy aria-hidden="true" className="mx-auto mb-6 h-12 w-12 text-neutral-800 opacity-20" />
+          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neutral-600 italic sm:tracking-[0.4em]">No tournament is available yet.</p>
+        </div>
       )}
 
-      <div className="mt-20 p-8 rounded-[40px] bg-gradient-to-br from-blue-600/5 to-transparent border border-white/5 relative overflow-hidden">
-         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 justify-between">
-            <div className="max-w-md">
-               <h4 className="text-xl font-black italic tracking-tighter text-white uppercase italic mb-2">Tournament Rules</h4>
-               <p className="text-[10px] font-bold text-neutral-500 leading-relaxed uppercase tracking-wider">
-                 All matches after the league stage are single-leg formats. 
-                 In case of a draw at 90 minutes, Extra Time (30 mins) will be played. 
-                 If still level, a Penalty Shootout decides the winner.
-               </p>
+      <div className="relative mt-14 overflow-hidden rounded-[32px] border border-white/5 bg-gradient-to-br from-blue-600/5 to-transparent p-6 sm:mt-20 sm:rounded-[40px] sm:p-8">
+        <div className="relative z-10 flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+          <div className="max-w-md">
+            <h2 className="mb-2 text-xl font-black uppercase tracking-tighter text-white italic">Tournament Rules</h2>
+            <p className="text-[10px] font-bold uppercase leading-relaxed tracking-wider text-neutral-500">
+              {selectedTournament && !isFixedCompetition
+                ? 'This legacy edition follows its originally published knockout stages and pairings.'
+                : 'The confirmed format has two seven-team groups. The top four in each group qualify for fixed quarter-finals A1–B4, A2–B3, B1–A4, and B2–A3, followed by the semi-finals and final. No third-place match is played.'}
+            </p>
+          </div>
+          <div className="flex w-full flex-wrap items-center gap-5 sm:w-auto sm:flex-nowrap sm:gap-6">
+            <div className="min-w-0 text-center">
+              <div className="truncate text-xl font-black text-white italic sm:text-2xl">{selectedTournament?.season ?? '—'}</div>
+              <div className="text-[8px] font-black uppercase tracking-widest text-neutral-600">Season</div>
             </div>
-            <div className="flex items-center gap-6">
-               <div className="text-center">
-                  <div className="text-2xl font-black text-white italic">16</div>
-                  <div className="text-[8px] font-black text-neutral-600 uppercase tracking-widest">Qualifiers</div>
-               </div>
-               <div className="h-8 w-px bg-white/5"></div>
-               <div className="text-center">
-                  <div className="text-2xl font-black text-white italic">1</div>
-                  <div className="text-[8px] font-black text-neutral-600 uppercase tracking-widest">Champion</div>
-               </div>
-               <div className="h-14 w-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-2xl shadow-blue-600/30 ml-4">
-                  <Trophy className="h-7 w-7 text-white" />
-               </div>
+            <div aria-hidden="true" className="h-8 w-px bg-white/5"></div>
+            <div className="min-w-0 text-center">
+              <div className="max-w-28 truncate text-sm font-black text-white italic sm:text-base" title={selectedTournament?.currentStage ? formatStageName(selectedTournament.currentStage) : undefined}>
+                {selectedTournament?.currentStage ? formatStageName(selectedTournament.currentStage) : 'Pending'}
+              </div>
+              <div className="text-[8px] font-black uppercase tracking-widest text-neutral-600">Current Stage</div>
             </div>
-         </div>
-         <div className="absolute -right-20 -bottom-20 h-64 w-64 bg-blue-600/5 rounded-full blur-[100px]"></div>
+            <div className="ml-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-600 shadow-2xl shadow-blue-600/30 sm:ml-4">
+              <Trophy aria-hidden="true" className="h-7 w-7 text-white" />
+            </div>
+          </div>
+        </div>
+        <div aria-hidden="true" className="absolute -bottom-20 -right-20 h-64 w-64 rounded-full bg-blue-600/5 blur-[100px]"></div>
       </div>
     </div>
   );

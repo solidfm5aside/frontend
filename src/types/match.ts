@@ -13,12 +13,16 @@ export interface MatchEvent {
 
 export interface Match {
   _id: string;
+  tournamentId: string | { _id: string };
   homeTeam: Team;
   awayTeam: Team;
   homeScore: number;
   awayScore: number;
   status: MatchStatus;
   stage: string;
+  groupKey?: 'A' | 'B';
+  round?: number;
+  leg?: number;
   date: string;
   venue?: string;
   isExtraTime?: boolean;

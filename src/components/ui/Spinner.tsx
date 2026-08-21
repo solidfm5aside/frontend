@@ -4,8 +4,9 @@
  */
 export function PageSpinner() {
   return (
-    <div className="flex h-64 items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
+    <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+      <div aria-hidden="true" className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600 motion-reduce:animate-none"></div>
+      <span className="sr-only">Loading content</span>
     </div>
   );
 }
@@ -15,8 +16,9 @@ export function PageSpinner() {
  */
 export function FullPageSpinner() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
+    <div className="flex min-h-screen items-center justify-center bg-black" role="status" aria-live="polite">
+      <div aria-hidden="true" className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600 motion-reduce:animate-none"></div>
+      <span className="sr-only">Loading page</span>
     </div>
   );
 }

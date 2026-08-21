@@ -4,6 +4,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 
+interface MessageResponse {
+  success: boolean;
+  message: string;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -15,14 +24,14 @@ export default function ForgotPasswordPage() {
     setMessage('');
 
     try {
-      const response: any = await apiClient.post('/auth/forgot-password', { email });
+      const response = await apiClient.post<MessageResponse, MessageResponse>('/auth/forgot-password', { email });
       if (response.success) {
         setStatus('success');
         setMessage(response.message);
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
       setStatus('error');
-      setMessage(err.message || 'Something went wrong');
+      setMessage(getErrorMessage(error, 'Something went wrong'));
     }
   };
 
@@ -66,8 +75,9 @@ export default function ForgotPasswordPage() {
               )}
 
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Admin Email</label>
+                <label htmlFor="forgot-password-email" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Admin Email</label>
                 <input
+                  id="forgot-password-email"
                   type="email"
                   required
                   placeholder="name@solidfm.com"

@@ -13,7 +13,7 @@ type Status =
 
 const STATUS_CONFIG: Record<Status, string> = {
   // Match
-  live:        'bg-red-500 text-white animate-pulse',
+  live:        'bg-red-500 text-white animate-pulse motion-reduce:animate-none',
   completed:   'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
   scheduled:   'bg-white/5 text-neutral-500 border border-white/10',
   cancelled:   'bg-neutral-800 text-neutral-600 border border-white/5',
@@ -27,15 +27,21 @@ const STATUS_CONFIG: Record<Status, string> = {
 };
 
 interface StatusBadgeProps {
-  status: string;
+  status?: string | null;
   className?: string;
 }
 
 export function StatusBadge({ status, className = '' }: StatusBadgeProps) {
-  const styles = STATUS_CONFIG[status as Status] ?? 'bg-white/5 text-neutral-500 border border-white/10';
+  const normalizedStatus = status?.trim() || 'unknown';
+  const styles = STATUS_CONFIG[normalizedStatus as Status] ?? 'bg-white/5 text-neutral-500 border border-white/10';
+  const label = normalizedStatus.replaceAll('_', ' ');
+
   return (
-    <span className={`px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${styles} ${className}`}>
-      {status}
+    <span
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${styles} ${className}`}
+      aria-label={`Status: ${label}`}
+    >
+      {label}
     </span>
   );
 }

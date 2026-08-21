@@ -3,9 +3,10 @@
 The official web platform for the **Solid FM 5-Aside Football League**. This is a high-performance, modern web application designed to provide live tournament updates, professional standings, and a robust administrative dashboard for match management.
 
 ### 🌟 High-Impact Features
-*   **🏆 Professional Standings**: Dynamic, multi-tournament league tables with automated tie-breaking (Goals > Assists).
-*   **🛰️ Broadcast Engine**: Integrated SMTP alert system to notify every team captain in real-time.
-*   **🔒 Secure Admin Shield**: Advanced role-based access control with account verification and hydration-aware auth flow.
+*   **🏆 Fixed Competition Workflow**: Fourteen teams, two manually assigned groups of seven, six group matches per team, top-four qualification, and the approved fixed quarter-final bracket.
+*   **📊 Auditable Rankings**: Points, goal difference, goals scored, head-to-head, then an explicit competition-committee decision when a tie still remains.
+*   **🛰️ Live Match Updates**: Socket.IO refreshes fixtures, results, standings, and match events without a page reload.
+*   **🔒 Secure Administration**: HttpOnly cookie sessions, server-validated role access, and super-admin-only administrator role changes.
 
 ---
 
@@ -49,26 +50,29 @@ The frontend communicates with the Node.js/Express backend via a centralized `ap
 
 ### Key Features:
 - **Base URL**: Configurable via `NEXT_PUBLIC_API_URL`.
-- **JWT Authentication**: Automatically attaches the Access Token from Zustand store to the `Authorization` header.
-- **Interceptors**:
-    - **Request**: Injects the Bearer token if the user is authenticated.
-    - **Response**: Simplifies data access and handles 
-    **Automatic Logout** if a `401 Unauthorized` error is detected.
-- **Cross-Origin**: Configured with `withCredentials: true` to support secure cookie handling.
+- **Authentication**: Access and refresh JWTs stay in HttpOnly cookies; the browser does not persist them in local storage.
+- **Session Bootstrap**: `/auth/me` validates the signed-in administrator before protected UI is shown.
+- **Refresh Handling**: One coordinated refresh request retries an expired authenticated request; a failed refresh clears local session state.
+- **Cross-Origin Cookies**: Axios uses `withCredentials: true`, and the backend must list the frontend's exact origin.
 
 ---
 
 ## 🛠️ Getting Started
 
 ### 1. Prerequisites
-- Node.js (v18 or higher)
+- Node.js 20.9 or newer
 - npm or yarn
 
 ### 2. Environment Setup
 Create a `.env.local` file in the root directory:
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 ```
+
+Set both values in the deployment environment before building. The backend's
+`CLIENT_URL` must contain the frontend's exact browser origin so cookies,
+origin checks, and Socket.IO agree; the localhost fallbacks are development-only.
 
 ### 3. Installation
 ```bash
@@ -85,10 +89,10 @@ The application will be available at `http://localhost:3000`.
 
 ## 🏆 Key Features
 
-- **Live Standings**: High-fidelity Flashscore-style table with real-time goal and point calculations synchronized via WebSockets.
-- **Player Statistics**: Detailed tracking for the "Golden Boot" race, including Goals and Assists as a primary tie-breaker.
-- **Admin Suite**: Secure dashboard for tournament lifecycle management, team registrations, and live match event broadcasting.
-- **SEO Optimized**: Fully configured metadata with OpenGraph support, dynamic sitemaps, and canonical URL handling in `src/app/layout.tsx`.
+- **Live Standings**: Separate Group A and Group B tables synchronized with completed group-stage results and committee tie decisions.
+- **Player Statistics**: Goals, assists, and cards rebuilt from recorded match events.
+- **Admin Suite**: Guided tournament setup, team/group assignment, fixture preview and publication, match control, bracket progression, team/player editing, and administrator access management.
+- **Responsive Public Site**: Accessible navigation, empty/error/retry states, reduced-motion support, optimized images, and layouts tested from mobile through desktop.
 - **Premium Aesthetics**: Dark-mode focused UI with smooth reveal animations and responsive typography.
 
 

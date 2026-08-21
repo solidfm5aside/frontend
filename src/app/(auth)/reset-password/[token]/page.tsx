@@ -6,6 +6,15 @@ import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 import { Eye, EyeOff } from 'lucide-react';
 
+interface MessageResponse {
+  success: boolean;
+  message: string;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,7 +38,7 @@ export default function ResetPasswordPage() {
     setMessage('');
 
     try {
-      const response: any = await apiClient.patch(`/auth/reset-password/${token}`, { password });
+      const response = await apiClient.patch<MessageResponse, MessageResponse>(`/auth/reset-password/${token}`, { password });
       if (response.success) {
         setStatus('success');
         setMessage(response.message);
@@ -37,9 +46,9 @@ export default function ResetPasswordPage() {
           router.push('/login');
         }, 3000);
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
       setStatus('error');
-      setMessage(err.message || 'Something went wrong');
+      setMessage(getErrorMessage(error, 'Something went wrong'));
     }
   };
 
@@ -80,9 +89,10 @@ export default function ResetPasswordPage() {
 
               <div className="space-y-6">
                 <div className="group">
-                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">New Password</label>
+                  <label htmlFor="new-password" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">New Password</label>
                   <div className="relative">
                     <input
+                      id="new-password"
                       type={showPassword ? 'text' : 'password'}
                       required
                       placeholder="••••••••"
@@ -93,6 +103,7 @@ export default function ResetPasswordPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide new password' : 'Show new password'}
                       className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -100,9 +111,10 @@ export default function ResetPasswordPage() {
                   </div>
                 </div>
                 <div className="group">
-                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Confirm Password</label>
+                  <label htmlFor="confirm-new-password" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Confirm Password</label>
                   <div className="relative">
                     <input
+                      id="confirm-new-password"
                       type={showConfirmPassword ? 'text' : 'password'}
                       required
                       placeholder="••••••••"
@@ -113,6 +125,7 @@ export default function ResetPasswordPage() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
                       className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
                     >
                       {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}

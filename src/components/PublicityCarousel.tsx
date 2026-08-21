@@ -13,6 +13,18 @@ interface Ad {
   isActive: boolean;
 }
 
+interface SettingsResponse {
+  success: boolean;
+  data?: { landing_ads?: Ad[] };
+}
+
+const DEFAULT_AD: Ad = {
+  title: 'Partner with Solid FM 5-Aside',
+  imageUrl: '/assets/publicity/banner1.png',
+  link: '/register-team',
+  isActive: true,
+};
+
 export default function PublicityCarousel() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -20,27 +32,19 @@ export default function PublicityCarousel() {
   const [isLoaded, setIsLoaded] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Default fallback ad if none are set in admin
-  const defaultAd: Ad = {
-    title: "Partner with Solid FM 5-Aside",
-    imageUrl: "/assets/publicity/banner1.png",
-    link: "/register-team",
-    isActive: true
-  };
-
   useEffect(() => {
     const fetchAds = async () => {
       try {
-        const response: any = await apiClient.get('/settings');
+        const response = await apiClient.get<SettingsResponse, SettingsResponse>('/settings');
         if (response.success && response.data?.landing_ads && response.data.landing_ads.length > 0) {
           const activeAds = response.data.landing_ads.filter((ad: Ad) => ad.isActive);
-          setAds(activeAds.length > 0 ? activeAds : [defaultAd]);
+          setAds(activeAds.length > 0 ? activeAds : [DEFAULT_AD]);
         } else {
-          setAds([defaultAd]);
+          setAds([DEFAULT_AD]);
         }
       } catch (error) {
-        console.error('Failed to fetch ads:', error);
-        setAds([defaultAd]);
+        console.warn('Publicity content is temporarily unavailable:', error);
+        setAds([DEFAULT_AD]);
       } finally {
         setIsLoaded(true);
       }
@@ -70,7 +74,7 @@ export default function PublicityCarousel() {
   }, [isLoaded, ads]);
 
   useEffect(() => {
-    if (ads.length <= 1 || isHovered) return;
+    if (ads.length <= 1 || isHovered || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % ads.length);
     }, 6000);
@@ -103,10 +107,10 @@ export default function PublicityCarousel() {
            
            {ads.length > 1 && (
              <div className="flex items-center gap-3">
-               <button onClick={prevSlide} className="h-12 w-12 rounded-full border border-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all">
+               <button type="button" onClick={prevSlide} aria-label="Show previous advertisement" className="h-12 w-12 rounded-full border border-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all">
                  <ChevronLeft className="h-6 w-6" />
                </button>
-               <button onClick={nextSlide} className="h-12 w-12 rounded-full border border-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all">
+               <button type="button" onClick={nextSlide} aria-label="Show next advertisement" className="h-12 w-12 rounded-full border border-white/10 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all">
                  <ChevronRight className="h-6 w-6" />
                </button>
              </div>
@@ -122,13 +126,14 @@ export default function PublicityCarousel() {
                  currentIndex < idx ? 'opacity-0 scale-110 translate-x-full' : 'opacity-0 scale-110 -translate-x-full'
                }`}
              >
-                <Link href={ad.link || '#'} target={ad.link.startsWith('http') ? "_blank" : "_self"} className="block relative h-full w-full">
+                <Link href={ad.link || '#'} target={ad.link.startsWith('http') ? '_blank' : '_self'} rel={ad.link.startsWith('http') ? 'noreferrer' : undefined} className="block relative h-full w-full">
                   {ad.imageUrl ? (
                     <Image 
                       src={ad.imageUrl} 
                       alt={ad.title} 
                       fill 
-                      priority={idx === 0}
+                      loading="lazy"
+                      sizes="(min-width: 1280px) 1280px, calc(100vw - 3rem)"
                       className={`object-cover transition-transform duration-[10000ms] ease-linear ${currentIndex === idx ? 'animate-slow-zoom' : ''}`}
                     />
                   ) : (
@@ -159,7 +164,10 @@ export default function PublicityCarousel() {
               {ads.map((_, idx) => (
                 <button 
                   key={idx}
+                  type="button"
                   onClick={() => setCurrentIndex(idx)}
+                  aria-label={`Show advertisement ${idx + 1} of ${ads.length}`}
+                  aria-current={currentIndex === idx ? 'true' : undefined}
                   className={`h-1.5 transition-all duration-500 rounded-full ${currentIndex === idx ? 'w-10 bg-blue-500' : 'w-2 bg-white/20 hover:bg-white/40'}`}
                 />
               ))}

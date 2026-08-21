@@ -11,10 +11,11 @@ import type { NextRequest } from 'next/server';
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only protect admin routes
-  if (pathname.startsWith('/admin')) {
-    // Check for the auth token cookie set by the login flow
-    const token = request.cookies.get('token')?.value 
+  // /admin is the public portal landing page. Protect dashboard routes below it.
+  if (pathname.startsWith('/admin/')) {
+    // This marker is only a render gate. The API still validates HttpOnly JWT cookies.
+    const token = request.cookies.get('admin_session')?.value
+      || request.cookies.get('token')?.value
       || request.headers.get('authorization');
 
     if (!token) {

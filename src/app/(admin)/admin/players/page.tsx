@@ -1,18 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import apiClient from '@/lib/api-client';
-import { toast } from 'sonner';
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  Trash2, 
-  MoreVertical,
-  ExternalLink
-} from 'lucide-react';
 import Link from 'next/link';
-
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ExternalLink, Pencil, RefreshCw, Search, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '@/lib/api-client';
 import { PageSpinner } from '@/components/ui/Spinner';
 
 interface Player {
@@ -24,139 +16,203 @@ interface Player {
   teamId: {
     _id: string;
     name: string;
+  } | null;
+}
+
+interface PlayerPagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+interface PlayersResponse {
+  success: boolean;
+  data: Player[];
+  pagination: PlayerPagination;
+  message?: string;
+}
+
+const DIRECTORY_PAGE_SIZE = 100;
+const POSITION_FILTERS = ['all', 'GK', 'DF', 'MF', 'FW'] as const;
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+async function loadCompletePlayerDirectory() {
+  const firstPage = await apiClient.get<PlayersResponse, PlayersResponse>(
+    `/players/admin?page=1&limit=${DIRECTORY_PAGE_SIZE}`,
+  );
+  if (!firstPage.success) throw new Error(firstPage.message || 'Player directory could not be loaded');
+
+  const remainingPages = Array.from(
+    { length: Math.max(0, firstPage.pagination.pages - 1) },
+    (_, index) => index + 2,
+  );
+  const remainingResponses = await Promise.all(
+    remainingPages.map((page) => apiClient.get<PlayersResponse, PlayersResponse>(
+      `/players/admin?page=${page}&limit=${DIRECTORY_PAGE_SIZE}`,
+    )),
+  );
+  const responses = [firstPage, ...remainingResponses];
+  if (responses.some((response) => !response.success)) {
+    throw new Error('One or more player-directory pages could not be loaded');
+  }
+
+  const reportedTotals = new Set(responses.map((response) => response.pagination.total));
+  const playersById = new Map(
+    responses.flatMap((response) => response.data).map((player) => [player._id, player]),
+  );
+  const expectedTotal = firstPage.pagination.total;
+  if (reportedTotals.size !== 1 || playersById.size !== expectedTotal) {
+    throw new Error('The player directory changed while loading. Refresh to load a complete list.');
+  }
+
+  return {
+    players: [...playersById.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    total: expectedTotal,
   };
 }
 
 export default function PlayersDirectoryPage() {
   const [players, setPlayers] = useState<Player[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [directoryTotal, setDirectoryTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [posFilter, setPosFilter] = useState('all');
+  const [positionFilter, setPositionFilter] = useState('all');
+  const requestSequence = useRef(0);
 
-  const fetchPlayers = async () => {
+  const fetchPlayers = useCallback(async (silent = false) => {
+    const requestId = ++requestSequence.current;
+    if (silent) setIsRefreshing(true);
+    else setIsLoading(true);
+    setLoadError(null);
+
     try {
-      const response: any = await apiClient.get('/players?limit=100');
-      if (response.success) {
-        setPlayers(response.data);
-      }
-    } catch (error) {
-      toast.error('Failed to fetch player directory');
+      const result = await loadCompletePlayerDirectory();
+      if (requestId !== requestSequence.current) return;
+      setPlayers(result.players);
+      setDirectoryTotal(result.total);
+    } catch (error: unknown) {
+      if (requestId !== requestSequence.current) return;
+      const message = getErrorMessage(error, 'Failed to fetch player directory');
+      setLoadError(message);
+      if (silent) toast.error(message);
     } finally {
-      setLoading(false);
+      if (requestId !== requestSequence.current) return;
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPlayers();
   }, []);
 
-  const filteredPlayers = players.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.teamId?.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPos = posFilter === 'all' || p.position === posFilter;
-    return matchesSearch && matchesPos;
-  });
+  useEffect(() => {
+    void fetchPlayers();
+    return () => {
+      requestSequence.current += 1;
+    };
+  }, [fetchPlayers]);
 
-  if (loading) return <PageSpinner />;
+  const filteredPlayers = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLocaleLowerCase();
+    return players.filter((player) => {
+      const matchesSearch = !normalizedSearch ||
+        player.name.toLocaleLowerCase().includes(normalizedSearch) ||
+        player.teamId?.name.toLocaleLowerCase().includes(normalizedSearch);
+      const matchesPosition = positionFilter === 'all' || player.position === positionFilter;
+      return matchesSearch && matchesPosition;
+    });
+  }, [players, positionFilter, searchTerm]);
 
+  if (isLoading) return <PageSpinner />;
 
   return (
     <div className="space-y-10 animate-reveal">
-      {/* Header & Controls */}
       <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-none">Players.</h1>
-          <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">Global Talent Directory</p>
+          <h1 className="text-4xl font-black italic uppercase leading-none tracking-tighter text-white md:text-5xl">Players.</h1>
+          <p className="mt-2 text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-500">Global Talent Directory</p>
+          <p aria-live="polite" className="mt-3 text-[9px] font-bold uppercase tracking-widest text-neutral-600">
+            {directoryTotal === players.length
+              ? `All ${directoryTotal} registered ${directoryTotal === 1 ? 'player' : 'players'} loaded`
+              : `${players.length} of ${directoryTotal} players loaded`}
+          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500 group-focus-within:text-blue-500 transition-colors" />
-            <input 
-              type="text"
-              placeholder="Search players or teams..."
-              className="pl-12 pr-6 py-4 rounded-2xl border border-white/5 bg-white/5 text-sm text-white focus:border-blue-500/50 outline-none transition-all w-full sm:w-64"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="group relative">
+            <label htmlFor="player-directory-search" className="sr-only">Search players or teams</label>
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500 transition-colors group-focus-within:text-blue-500" />
+            <input id="player-directory-search" type="search" placeholder="Search players or teams..." className="w-full rounded-2xl border border-white/5 bg-white/5 py-4 pl-12 pr-6 text-sm text-white outline-none transition-all focus:border-blue-500/50 sm:w-64" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
           </div>
 
-          <div className="flex gap-2 p-1.5 rounded-2xl bg-white/[0.02] border border-white/5 overflow-x-auto scrollbar-hide">
-            {['all', 'GK', 'DF', 'MF', 'FW'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setPosFilter(f)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
-                  posFilter === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'
-                }`}
-              >
-                {f}
+          <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] p-1.5 scrollbar-hide" aria-label="Filter players by position">
+            {POSITION_FILTERS.map((filter) => (
+              <button key={filter} type="button" aria-pressed={positionFilter === filter} onClick={() => setPositionFilter(filter)} className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${positionFilter === filter ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'}`}>
+                {filter}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Players Grid/Table */}
-      <div className="rounded-[40px] border border-white/5 bg-white/[0.01] overflow-hidden backdrop-blur-3xl shadow-2xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-white/5 bg-white/[0.02]">
-                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Player Details</th>
-                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Current Club</th>
-                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-center">Pos</th>
-                <th className="px-4 md:px-8 py-5 md:py-6 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filteredPlayers.map((player) => (
-                <tr key={player._id} className="hover:bg-white/[0.02] transition-colors group">
-                  <td className="px-4 md:px-8 py-6 md:py-8">
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-neutral-900 border border-white/5 flex items-center justify-center font-black text-neutral-700 group-hover:text-blue-500 group-hover:border-blue-500/30 transition-all text-xl">
-                        {player.jerseyNumber}
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white tracking-tight uppercase group-hover:text-blue-500 transition-colors">{player.name}</p>
-                        <p className="text-[10px] font-black text-neutral-600 uppercase tracking-widest mt-1 tracking-widest">{player.nationality}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 md:px-8 py-6 md:py-8">
-                    <div className="flex items-center gap-2">
-                       <p className="text-sm font-bold text-neutral-300 uppercase tracking-tight">{player.teamId?.name || 'Unassigned'}</p>
-                       {player.teamId && (
-                         <Link href={`/admin/teams/${player.teamId._id}/squad`} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ExternalLink className="h-3 w-3" />
-                         </Link>
-                       )}
-                    </div>
-                  </td>
-                  <td className="px-4 md:px-8 py-6 md:py-8 text-center text-[10px] font-black">
-                    <span className="px-2 py-1 rounded-lg bg-white/5 text-neutral-500 group-hover:text-white transition-colors">
-                      {player.position}
-                    </span>
-                  </td>
-                  <td className="px-4 md:px-8 py-6 md:py-8 text-right">
-                    <button className="text-neutral-700 hover:text-white transition-colors">
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filteredPlayers.length === 0 && (
-                 <tr>
-                    <td colSpan={4} className="px-8 py-32 text-center">
-                       <Users className="h-12 w-12 text-neutral-800 mx-auto mb-6" />
-                       <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] italic">No elite players discovered yet</p>
-                    </td>
-                 </tr>
-              )}
-            </tbody>
-          </table>
+      {loadError ? (
+        <div role="alert" className="flex flex-col gap-4 rounded-[28px] border border-red-500/20 bg-red-500/5 p-8 text-center sm:items-center">
+          <p className="text-sm font-bold text-red-300">{loadError}</p>
+          <button type="button" onClick={() => void fetchPlayers()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 px-5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5"><RefreshCw className="h-3.5 w-3.5" /> Load complete directory</button>
         </div>
-      </div>
+      ) : (
+        <div className="overflow-hidden rounded-[40px] border border-white/5 bg-white/[0.01] shadow-2xl backdrop-blur-3xl">
+          <div className="flex flex-col gap-2 border-b border-white/5 bg-white/[0.02] px-5 py-4 text-[9px] font-bold uppercase tracking-widest text-neutral-600 sm:flex-row sm:items-center sm:justify-between md:px-8">
+            <span>{filteredPlayers.length} {filteredPlayers.length === 1 ? 'player' : 'players'} match the current view</span>
+            <button type="button" onClick={() => void fetchPlayers(true)} disabled={isRefreshing} className="inline-flex w-fit items-center gap-2 text-blue-400 transition-colors hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh all pages</button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-white/5 bg-white/[0.02]">
+                  <th scope="col" className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Player Details</th>
+                  <th scope="col" className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Current Club</th>
+                  <th scope="col" className="px-4 py-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Pos</th>
+                  <th scope="col" className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredPlayers.map((player) => (
+                  <tr key={player._id} className="group transition-colors hover:bg-white/[0.02]">
+                    <td className="px-4 py-6 md:px-8 md:py-8">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/5 bg-neutral-900 text-xl font-black text-neutral-700 transition-all group-hover:border-blue-500/30 group-hover:text-blue-500">{player.jerseyNumber}</div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold uppercase tracking-tight text-white transition-colors group-hover:text-blue-500">{player.name}</p>
+                          <p className="mt-1 truncate text-[10px] font-black uppercase tracking-widest text-neutral-600">{player.nationality}</p>
+                          {player.teamId ? (
+                            <Link href={`/admin/teams/${player.teamId._id}/squad`} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 text-[9px] font-black uppercase tracking-widest text-blue-400 md:hidden">
+                              <Pencil className="h-3.5 w-3.5" /> Edit in squad
+                            </Link>
+                          ) : null}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-6 md:px-8 md:py-8">
+                      {player.teamId ? <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tight text-neutral-300 transition-colors hover:text-blue-400"><span>{player.teamId.name}</span><ExternalLink className="h-3.5 w-3.5" /></Link> : <span className="text-sm font-bold uppercase text-neutral-600">Unassigned</span>}
+                    </td>
+                    <td className="px-4 py-6 text-center text-[10px] font-black md:px-8 md:py-8"><span className="rounded-lg bg-white/5 px-2 py-1 text-neutral-500 transition-colors group-hover:text-white">{player.position}</span></td>
+                    <td className="px-4 py-6 text-right md:px-8 md:py-8">
+                      {player.teamId ? <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-blue-400 transition-colors hover:bg-blue-600 hover:text-white"><Pencil className="h-3.5 w-3.5" /> Manage squad</Link> : <span className="text-[9px] font-black uppercase tracking-widest text-neutral-700">No squad</span>}
+                    </td>
+                  </tr>
+                ))}
+                {filteredPlayers.length === 0 ? (
+                  <tr><td colSpan={4} className="px-8 py-32 text-center"><Users className="mx-auto mb-6 h-12 w-12 text-neutral-800" /><p className="text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-600">No players match this search or position</p></td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

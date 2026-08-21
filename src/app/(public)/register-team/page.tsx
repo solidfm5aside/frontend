@@ -1,9 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
+
+interface SettingsResponse {
+  success: boolean;
+  data?: { registration_live?: string | boolean };
+}
+
+interface RegistrationResponse {
+  success: boolean;
+  message?: string;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export default function RegisterTeamPage() {
   const [formData, setFormData] = useState({
@@ -19,36 +34,58 @@ export default function RegisterTeamPage() {
   const [message, setMessage] = useState('');
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
+  const [statusCheckError, setStatusCheckError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const checkActiveTournament = async () => {
-      try {
-        const response: any = await apiClient.get('/settings');
-        if (response.success && response.data) {
-          const isLive = response.data.registration_live === 'true' || response.data.registration_live === true;
-          setIsRegistrationOpen(isLive);
-        }
-      } catch (e) {
-        console.error('Failed to check tournament status');
-      } finally {
-        setCheckingStatus(false);
-      }
-    };
-    checkActiveTournament();
+  const checkActiveTournament = useCallback(async () => {
+    setCheckingStatus(true);
+    setStatusCheckError(null);
+    try {
+      const response = await apiClient.get<SettingsResponse, SettingsResponse>('/settings');
+      if (!response.success || !response.data) throw new Error('Registration status is unavailable');
+
+      const isLive = response.data.registration_live === 'true' || response.data.registration_live === true;
+      setIsRegistrationOpen(isLive);
+    } catch (error: unknown) {
+      setStatusCheckError(getErrorMessage(error, 'Unable to check registration status. Please try again.'));
+    } finally {
+      setCheckingStatus(false);
+    }
   }, []);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 1024 * 1024) {
-        toast.error('Logo must be smaller than 1MB');
-        return;
-      }
-      setLogoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setLogoPreview(reader.result as string);
-      reader.readAsDataURL(file);
+  useEffect(() => {
+    void checkActiveTournament();
+  }, [checkActiveTournament]);
+
+  useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+    };
+  }, [logoPreview]);
+
+  const clearLogoSelection = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
+  const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Choose a JPG, PNG, or WebP logo');
+      clearLogoSelection();
+      return;
     }
+    if (file.size > 1024 * 1024) {
+      toast.error('Logo must be 1 MB or smaller');
+      clearLogoSelection();
+      return;
+    }
+
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,25 +101,40 @@ export default function RegisterTeamPage() {
       data.append('contactEmail', formData.contactEmail);
       if (logoFile) data.append('logo', logoFile);
 
-      const response: any = await apiClient.post('/teams/register', data, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      if (response.success) {
-        setStatus('success');
-        setMessage(response.message || 'Registration successful! We will contact you shortly.');
-        toast.success('Registration submitted successfully!');
-      }
-    } catch (err: any) {
+      const response = await apiClient.post<RegistrationResponse, RegistrationResponse>('/teams/register', data);
+      if (!response.success) throw new Error(response.message || 'Registration failed');
+
+      setStatus('success');
+      setMessage(response.message || 'Registration successful! We will contact you shortly.');
+      clearLogoSelection();
+      toast.success('Registration submitted successfully!');
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Registration failed. Please try again or contact support.');
       setStatus('error');
-      setMessage(err.message || 'Registration failed. Please try again or contact support.');
-      toast.error(err.message || 'Registration failed');
+      setMessage(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
   if (checkingStatus) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
+      <div className="flex min-h-screen items-center justify-center bg-black" role="status" aria-live="polite">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600/20 border-t-blue-600"></div>
+        <span className="sr-only">Checking team registration status</span>
+      </div>
+    );
+  }
+
+  if (statusCheckError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black px-6 font-outfit">
+        <div className="w-full max-w-md rounded-[32px] border border-red-500/20 bg-red-500/5 p-8 text-center" role="alert">
+          <h2 className="text-2xl font-black uppercase italic text-white">Status unavailable</h2>
+          <p className="mt-4 text-sm text-red-200">{statusCheckError}</p>
+          <button type="button" onClick={() => void checkActiveTournament()} className="mt-6 rounded-2xl bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-blue-500">
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
@@ -157,7 +209,7 @@ export default function RegisterTeamPage() {
         <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-6 md:p-12 backdrop-blur-3xl shadow-2xl">
           <form className="space-y-8 md:space-y-10" onSubmit={handleSubmit}>
             {status === 'error' && (
-              <div className="rounded-2xl bg-red-500/10 p-5 text-[10px] md:text-xs font-bold uppercase tracking-widest text-red-500 border border-red-500/20">
+              <div className="rounded-2xl bg-red-500/10 p-5 text-[10px] md:text-xs font-bold uppercase tracking-widest text-red-500 border border-red-500/20" role="alert" aria-live="assertive">
                 {message}
               </div>
             )}
@@ -165,12 +217,12 @@ export default function RegisterTeamPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Logo Upload */}
               <div className="md:col-span-2 flex flex-col items-center justify-center">
-                <label className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500 mb-6 block text-center">Squad Logo</label>
+                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500 mb-6 block text-center">Squad Logo</span>
                 <div className="relative group">
-                  <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" id="logo-upload" />
+                  <input ref={logoInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleLogoChange} className="hidden" id="logo-upload" />
                   <label htmlFor="logo-upload" className="flex h-28 w-28 sm:h-32 sm:w-32 md:h-40 md:w-40 cursor-pointer items-center justify-center rounded-[30px] sm:rounded-[40px] border-2 border-dashed border-white/10 bg-white/5 transition-all hover:border-blue-500/50 hover:bg-white/10 overflow-hidden relative">
                     {logoPreview ? (
-                      <img src={logoPreview} alt="Logo Preview" className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                      <Image src={logoPreview} alt="Selected squad logo preview" fill sizes="160px" unoptimized className="object-cover transition-transform group-hover:scale-110" />
                     ) : (
                       <div className="text-center space-y-2">
                         <div className="text-3xl text-neutral-600 group-hover:text-blue-500 transition-colors">+</div>
@@ -179,39 +231,40 @@ export default function RegisterTeamPage() {
                     )}
                   </label>
                   {logoPreview && (
-                    <button type="button" onClick={() => { setLogoPreview(null); setLogoFile(null); }} className="absolute -top-2 -right-2 h-8 w-8 rounded-full bg-red-500 text-white font-bold flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg scale-0 group-hover:scale-100 duration-300">×</button>
+                    <button type="button" onClick={clearLogoSelection} aria-label="Remove selected squad logo" className="absolute -top-2 -right-2 h-8 w-8 rounded-full bg-red-500 text-white font-bold flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg scale-0 group-hover:scale-100 group-focus-within:scale-100 duration-300">×</button>
                   )}
                 </div>
                 <p className="mt-4 text-[9px] font-bold text-neutral-600 uppercase tracking-widest italic">Square / Transparent PNG preferred (Max 1MB)</p>
               </div>
 
               <div className="group md:col-span-2">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">Team Name</label>
-                <input type="text" required placeholder="e.g. Enugu Stars" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                <label htmlFor="public-team-name" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">Team Name</label>
+                <input id="public-team-name" type="text" required placeholder="e.g. Enugu Stars" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">City / Location</label>
-                <input type="text" required placeholder="Enugu" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
+                <label htmlFor="public-team-city" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">City / Location</label>
+                <input id="public-team-city" type="text" required placeholder="Enugu" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">Captain's Name</label>
-                <input type="text" required placeholder="Full Name" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.captainName} onChange={(e) => setFormData({ ...formData, captainName: e.target.value })} />
+                <label htmlFor="public-team-captain" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">Captain&apos;s Name</label>
+                <input id="public-team-captain" type="text" required placeholder="Full Name" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.captainName} onChange={(e) => setFormData({ ...formData, captainName: e.target.value })} />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">WhatsApp / Phone</label>
-                <input type="tel" required placeholder="080XXXXXXXX" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} />
+                <label htmlFor="public-team-phone" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">WhatsApp / Phone</label>
+                <input id="public-team-phone" type="tel" required placeholder="080XXXXXXXX" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.contactPhone} onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })} />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">Contact Email</label>
-                <input type="email" required placeholder="name@example.com" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} />
+                <label htmlFor="public-team-email" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-4 block">Contact Email</label>
+                <input id="public-team-email" type="email" required placeholder="name@example.com" className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-5 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all text-sm font-medium" value={formData.contactEmail} onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })} />
               </div>
             </div>
 
-            <button type="submit" disabled={status === 'loading'} className="group relative flex h-20 w-full items-center justify-center rounded-3xl bg-white text-xl font-black text-black transition-all hover:bg-neutral-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-2xl shadow-white/5">
+            <button type="submit" disabled={status === 'loading'} aria-busy={status === 'loading'} className="group relative flex h-20 w-full items-center justify-center rounded-3xl bg-white text-xl font-black text-black transition-all hover:bg-neutral-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-2xl shadow-white/5">
               <span className={status === 'loading' ? 'opacity-0' : 'opacity-100 uppercase italic tracking-tighter'}>Submit Application</span>
               {status === 'loading' && (
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center" role="status" aria-live="polite">
                   <div className="h-8 w-8 animate-spin rounded-full border-4 border-black/20 border-t-black"></div>
+                  <span className="sr-only">Submitting team registration</span>
                 </div>
               )}
             </button>

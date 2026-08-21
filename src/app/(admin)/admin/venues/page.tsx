@@ -1,9 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
-import { MapPin, Plus, Trash2, Edit2 } from 'lucide-react';
+import { AlertCircle, Edit2, MapPin, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import type { ApiResponse } from '@/types';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 interface Venue {
   _id: string;
@@ -15,8 +20,11 @@ interface Venue {
 export default function VenuesPage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedSuccessfully, setHasLoadedSuccessfully] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const venueRequestIdRef = useRef(0);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -24,26 +32,45 @@ export default function VenuesPage() {
     importance: 1,
   });
 
-  const fetchVenues = async () => {
+  const fetchVenues = useCallback(async () => {
+    const requestId = ++venueRequestIdRef.current;
+    setLoading(true);
+
     try {
-      setLoading(true);
-      const res: any = await apiClient.get('/venues');
-      if (res.success) {
-        setVenues(res.data);
+      const res = await apiClient.get<ApiResponse<Venue[]>, ApiResponse<Venue[]>>('/venues');
+      if (!res.success || !Array.isArray(res.data)) {
+        throw new Error(res.message || 'Failed to load the venue catalogue');
       }
-    } catch (error) {
-      toast.error('Failed to fetch venues');
+      if (requestId !== venueRequestIdRef.current) return;
+
+      setVenues(res.data);
+      setHasLoadedSuccessfully(true);
+      setLoadError(null);
+    } catch (error: unknown) {
+      if (requestId !== venueRequestIdRef.current) return;
+      setLoadError(getErrorMessage(error, 'Failed to load the venue catalogue'));
     } finally {
-      setLoading(false);
+      if (requestId === venueRequestIdRef.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchVenues();
-  }, []);
+    void fetchVenues();
+
+    return () => {
+      venueRequestIdRef.current += 1;
+    };
+  }, [fetchVenues]);
+
+  const isCatalogueCurrent = hasLoadedSuccessfully && !loadError && !loading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isCatalogueCurrent) {
+      toast.error('Reload the venue catalogue before saving');
+      return;
+    }
+
     try {
       const payload = {
         name: formData.name,
@@ -61,30 +88,35 @@ export default function VenuesPage() {
       setIsFormOpen(false);
       setEditingId(null);
       setFormData({ name: '', address: '', importance: 1 });
-      fetchVenues();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save venue');
+      void fetchVenues();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to save venue'));
     }
   };
 
   const handleEdit = (v: Venue) => {
+    if (!isCatalogueCurrent) return;
     setFormData({ name: v.name, address: v.address, importance: v.importance });
     setEditingId(v._id);
     setIsFormOpen(true);
   };
 
   const handleDelete = async (id: string) => {
+    if (!isCatalogueCurrent) {
+      toast.error('Reload the venue catalogue before deleting a venue');
+      return;
+    }
     if (!confirm('Are you sure you want to delete this venue?')) return;
     try {
       await apiClient.delete(`/venues/${id}`);
       toast.success('Venue deleted');
-      fetchVenues();
-    } catch (error) {
+      void fetchVenues();
+    } catch {
       toast.error('Failed to delete venue');
     }
   };
 
-  if (loading) {
+  if (loading && !hasLoadedSuccessfully && !loadError) {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500/20 border-t-blue-500"></div>
@@ -105,16 +137,49 @@ export default function VenuesPage() {
           </p>
         </div>
         <button
+          type="button"
+          disabled={!isCatalogueCurrent}
+          aria-describedby={!isCatalogueCurrent ? 'venue-catalogue-status' : undefined}
+          title={!isCatalogueCurrent ? 'Load the current venue catalogue before adding a venue' : undefined}
           onClick={() => {
             setIsFormOpen(true);
             setEditingId(null);
             setFormData({ name: '', address: '', importance: 1 });
           }}
-          className="flex h-12 items-center gap-3 rounded-2xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 hover:scale-105 active:scale-95"
+          className="flex h-12 items-center gap-3 rounded-2xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-blue-600"
         >
           <Plus className="h-4 w-4" /> Add Venue
         </button>
       </div>
+
+      {loadError ? (
+        <div id="venue-catalogue-status" role="alert" className="flex flex-col gap-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-5 text-red-300 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="text-sm font-bold">{loadError}</p>
+              <p className="mt-1 text-xs text-red-300/70">
+                {hasLoadedSuccessfully
+                  ? 'Showing the last successfully loaded venues. Venue changes stay locked until the catalogue is current.'
+                  : 'Adding a venue stays locked until the catalogue loads, which prevents accidental duplicates.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void fetchVenues()}
+            disabled={loading}
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-400/20 bg-black/20 px-4 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-black/30 disabled:cursor-wait disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Retrying...' : 'Retry'}
+          </button>
+        </div>
+      ) : loading && hasLoadedSuccessfully ? (
+        <p id="venue-catalogue-status" role="status" className="text-xs font-bold text-neutral-500">
+          Refreshing venue catalogue...
+        </p>
+      ) : null}
 
       {isFormOpen && (
         <div className="rounded-[40px] border border-blue-500/20 bg-blue-500/5 p-8 backdrop-blur-3xl animate-reveal">
@@ -123,6 +188,7 @@ export default function VenuesPage() {
               {editingId ? 'Edit Venue' : 'New Venue'}
             </h2>
             <button 
+              type="button"
               onClick={() => setIsFormOpen(false)}
               className="text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white transition-colors"
             >
@@ -132,8 +198,9 @@ export default function VenuesPage() {
 
           <form onSubmit={handleSubmit} className="grid gap-6 md:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Venue Name</label>
+              <label htmlFor="venue-name" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Venue Name</label>
               <input
+                id="venue-name"
                 required
                 className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
                 value={formData.name}
@@ -142,8 +209,9 @@ export default function VenuesPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Address / Location</label>
+              <label htmlFor="venue-address" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Address / Location</label>
               <input
+                id="venue-address"
                 required
                 className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
                 value={formData.address}
@@ -152,8 +220,9 @@ export default function VenuesPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Importance (1 = Highest)</label>
+              <label htmlFor="venue-importance" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Importance (1 = Highest)</label>
               <input
+                id="venue-importance"
                 required
                 type="number"
                 min="1"
@@ -166,7 +235,8 @@ export default function VenuesPage() {
             <div className="md:col-span-3 flex justify-end">
               <button
                 type="submit"
-                className="h-12 rounded-2xl bg-white px-8 font-black text-black hover:bg-neutral-200 transition-colors shadow-xl shadow-white/10"
+                disabled={!isCatalogueCurrent}
+                className="h-12 rounded-2xl bg-white px-8 font-black text-black hover:bg-neutral-200 transition-colors shadow-xl shadow-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Save Venue
               </button>
@@ -181,14 +251,20 @@ export default function VenuesPage() {
           <div key={venue._id} className="group relative rounded-[32px] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-xl transition-all hover:bg-white/[0.04]">
             <div className="absolute right-6 top-6 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
               <button 
+                type="button"
                 onClick={() => handleEdit(venue)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-blue-600 transition-colors"
+                aria-label={`Edit ${venue.name}`}
+                disabled={!isCatalogueCurrent}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-blue-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
               >
                 <Edit2 className="h-3 w-3" />
               </button>
               <button 
+                type="button"
                 onClick={() => handleDelete(venue._id)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-red-600 transition-colors"
+                aria-label={`Delete ${venue.name}`}
+                disabled={!isCatalogueCurrent}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-red-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -217,7 +293,7 @@ export default function VenuesPage() {
           </div>
         ))}
 
-        {venues.length === 0 && !isFormOpen && (
+        {venues.length === 0 && !isFormOpen && hasLoadedSuccessfully && !loadError && (
           <div className="col-span-full flex flex-col items-center justify-center rounded-[40px] border border-dashed border-white/10 bg-white/[0.02] py-20 text-center">
              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-neutral-600">
                 <MapPin className="h-8 w-8" />

@@ -8,6 +8,11 @@ import { CalendarDays, AlertCircle, LockKeyhole } from 'lucide-react';
 import Link from 'next/link';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { FixtureConfigModal } from '@/components/admin/FixtureConfigModal';
+import type { ApiResponse } from '@/types';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 interface Stats {
   totalTeams: number;
@@ -25,6 +30,8 @@ interface UpcomingTournament {
   status: string;
   startDate: string;
   currentStage: string;
+  formatVersion?: 1 | 2;
+  format?: 'legacy_league' | 'two_group_knockout';
 }
 
 interface Readiness {
@@ -42,12 +49,12 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [venueCount, setVenueCount] = useState(0);
   const { admin } = useAuthStore();
-  const isSuperAdmin = admin?.role === 'super_admin';
+  const canManageTournaments = admin?.role === 'admin' || admin?.role === 'super_admin';
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response: any = await apiClient.get('/dashboard/stats');
+        const response = await apiClient.get<ApiResponse<Stats>, ApiResponse<Stats>>('/dashboard/stats');
         if (response.success) setStats(response.data);
       } catch (error) {
         console.error('Failed to fetch stats:', error);
@@ -58,24 +65,25 @@ export default function DashboardPage() {
 
     const fetchVenues = async () => {
       try {
-        const res: any = await apiClient.get('/venues');
+        const res = await apiClient.get<ApiResponse<unknown[]>, ApiResponse<unknown[]>>('/venues');
         if (res.success) setVenueCount(res.data.length);
-      } catch (e) {}
+      } catch {}
     };
 
     const fetchUpcomingTournament = async () => {
       try {
-        const res: any = await apiClient.get('/tournaments');
+        const res = await apiClient.get<ApiResponse<UpcomingTournament[]>, ApiResponse<UpcomingTournament[]>>('/tournaments');
         if (res.success) {
-          const pending = res.data.find((t: any) => t.status === 'upcoming' || t.status === 'ongoing');
+          const pending = res.data.find((tournament) => tournament.status === 'ongoing') ??
+            res.data.find((tournament) => tournament.status === 'upcoming');
           if (pending) {
             setUpcomingTournament(pending);
-            if (pending.status === 'upcoming') {
+            if (pending.status === 'upcoming' && pending.formatVersion !== 2) {
               try {
-                const rRes: any = await apiClient.get(`/tournaments/${pending._id}/readiness`);
+                const rRes = await apiClient.get<ApiResponse<Readiness>, ApiResponse<Readiness>>(`/tournaments/${pending._id}/readiness`);
                 if (rRes.success) setReadiness(rRes.data);
-              } catch (e) {}
-            } else {
+              } catch {}
+            } else if (pending.formatVersion !== 2) {
               setReadiness({ isReady: true, totalTeams: 28, allTeamsReady: true });
             }
           }
@@ -91,7 +99,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleGenerateFixtures = () => {
-    if (!upcomingTournament) return;
+    if (!upcomingTournament || upcomingTournament.formatVersion === 2) return;
     setIsModalOpen(true);
   };
 
@@ -101,24 +109,27 @@ export default function DashboardPage() {
     setIsGenerating(true);
     setIsModalOpen(false);
     try {
-      const response: any = await apiClient.post(`/tournaments/${upcomingTournament._id}/generate-fixtures`, {
+      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(`/tournaments/${upcomingTournament._id}/generate-fixtures`, {
         numRounds,
         matchesPerDay
       });
       if (response.success) {
         toast.success(`Fixtures successfully generated (${numRounds} rounds, ${matchesPerDay} matches/day)!`);
         setUpcomingTournament(prev => prev ? { ...prev, fixturesGenerated: true, currentStage: 'league' } : null);
-        const statsRes: any = await apiClient.get('/dashboard/stats');
+        const statsRes = await apiClient.get<ApiResponse<Stats>, ApiResponse<Stats>>('/dashboard/stats');
         if (statsRes.success) setStats(statsRes.data);
       }
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to generate fixtures');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to generate fixtures'));
     } finally {
       setIsGenerating(false);
     }
   };
 
   if (isLoading) return <PageSpinner />;
+
+  const isV2Competition = upcomingTournament?.formatVersion === 2 &&
+    upcomingTournament.format === 'two_group_knockout';
 
   const statCards = [
     { name: 'Total Teams', value: stats?.totalTeams || 0, icon: '🛡️', color: 'text-blue-500' },
@@ -135,7 +146,9 @@ export default function DashboardPage() {
     <div className="space-y-12 animate-reveal">
       <div>
         <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase">Overview.</h1>
-        <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase">Season 2026 Dashboard</p>
+        <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase">
+          {upcomingTournament ? `Season ${upcomingTournament.season} Dashboard` : 'Tournament Dashboard'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -200,25 +213,32 @@ export default function DashboardPage() {
                       : <CalendarDays className={`h-5 w-5 ${readiness?.isReady ? 'text-blue-500' : 'text-neutral-500'}`} />
                     }
                     <div>
-                      <h4 className="text-sm font-bold text-white uppercase tracking-tighter">Initialize Fixtures</h4>
+                      <h4 className="text-sm font-bold text-white uppercase tracking-tighter">{isV2Competition ? 'Competition Workflow' : 'Initialize Fixtures'}</h4>
                       <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-1 italic">
-                        {upcomingTournament.fixturesGenerated
+                        {isV2Competition
+                          ? `${upcomingTournament.name} — 14-team group competition`
+                          : upcomingTournament.fixturesGenerated
                           ? 'Fixtures already generated — locked'
                           : `${upcomingTournament.name} — Season ${upcomingTournament.season}`
                         }
                       </p>
                     </div>
                   </div>
-                  {upcomingTournament.fixturesGenerated ? (
+                  {isV2Competition ? (
+                    <Link href="/admin/tournaments" className="flex h-9 items-center rounded-xl bg-blue-600 px-5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-500">
+                      Open Workflow
+                    </Link>
+                  ) : upcomingTournament.fixturesGenerated ? (
                     <span className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 text-neutral-600 border border-white/5 flex items-center gap-1.5">
                       <LockKeyhole className="h-3 w-3" /> Generated
                     </span>
-                  ) : !isSuperAdmin ? (
-                    <span className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 text-neutral-600 border border-white/5 flex items-center gap-1.5 cursor-not-allowed" title="Only the Super Admin can generate fixtures">
-                      <LockKeyhole className="h-3 w-3" /> Super Admin Only
+                  ) : !canManageTournaments ? (
+                    <span className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 text-neutral-600 border border-white/5 flex items-center gap-1.5 cursor-not-allowed" title="Administrator access is required to generate fixtures">
+                      <LockKeyhole className="h-3 w-3" /> Administrator Only
                     </span>
                   ) : (
                     <button
+                      type="button"
                       disabled={!readiness?.isReady || isGenerating}
                       onClick={handleGenerateFixtures}
                       className="h-9 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600 shadow-lg shadow-blue-600/20"
@@ -227,7 +247,7 @@ export default function DashboardPage() {
                     </button>
                   )}
                 </div>
-                {!upcomingTournament.fixturesGenerated && readiness && !readiness.isReady && (
+                {!isV2Competition && !upcomingTournament.fixturesGenerated && readiness && !readiness.isReady && (
                   <div className="flex items-start gap-2 text-[10px] font-bold text-orange-400 uppercase tracking-wide">
                     <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                     <span>Needs {28 - readiness.totalTeams} more team{readiness.totalTeams !== 27 ? 's' : ''} • All teams need 5+ players</span>

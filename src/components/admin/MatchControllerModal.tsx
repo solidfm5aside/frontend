@@ -1,11 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { isAxiosError } from 'axios';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
-import { X, Plus, Trash2, Trophy, Clock, Flame, Check, Square } from 'lucide-react';
+import { X, Plus, Trash2, Trophy, Clock, Check, Square } from 'lucide-react';
 import { Match, MatchEvent, Player, ApiResponse } from '@/types';
 
+const KNOCKOUT_STAGES = new Set([
+  'playoff',
+  'round_of_16',
+  'quarter_finals',
+  'semi_finals',
+  'final',
+  'third_place',
+]);
 
 
 
@@ -15,17 +24,29 @@ interface MatchControllerModalProps {
   onUpdate: () => void;
 }
 
+interface EventMutationResult {
+  match: Match;
+  eventId: string;
+  replayed: boolean;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function MatchControllerModal({ matchId, onClose, onUpdate }: MatchControllerModalProps) {
   const [match, setMatch] = useState<Match | null>(null);
   const [homePlayers, setHomePlayers] = useState<Player[]>([]);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rosterLoadError, setRosterLoadError] = useState<string | null>(null);
   
   // --- Optimistic local state (decoupled from match object) ---
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
-  const [matchStatus, setMatchStatus] = useState('');
+  const [matchStatus, setMatchStatus] = useState<Match['status'] | ''>('');
 
   // Speed Logging State
   const [eventMode, setEventMode] = useState<'goal' | 'yellow_card' | 'red_card'>('goal');
@@ -38,6 +59,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   const [flashPlayerId, setFlashPlayerId] = useState<string | null>(null);
   const [autoAdvance, setAutoAdvance] = useState(true);
   const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+  const [isEventUpdating, setIsEventUpdating] = useState(false);
 
   // New state to track atomic goal creation (prevents double logging)
   const [pendingGoalInfo, setPendingGoalInfo] = useState<{ 
@@ -55,17 +77,33 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
   // Track in-flight requests to prevent double-submit (useRef persists across renders)
   const pendingRef = useRef(false);
+  const pendingGoalRef = useRef(false);
 
-  useEffect(() => {
-    fetchMatchDetails();
-  }, [matchId]);
+  const fetchPlayers = useCallback(async (
+    teamId: string,
+    tournamentId: string,
+  ): Promise<Player[]> => {
+    const response = await apiClient.get<ApiResponse<Player[]>, ApiResponse<Player[]>>(
+      `/players/admin?teamId=${encodeURIComponent(teamId)}&tournamentId=${encodeURIComponent(tournamentId)}&limit=100`,
+    );
+    if (!response.success || !Array.isArray(response.data)) {
+      throw new Error(response.message || 'The squad could not be loaded');
+    }
+    return response.data;
+  }, []);
 
-  const fetchMatchDetails = async () => {
+  const fetchMatchDetails = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    setRosterLoadError(null);
     try {
-      const resp: ApiResponse<any> = await apiClient.get(`/matches?matchId=${matchId}`);
-      const m = Array.isArray(resp.data)
-        ? resp.data.find((item: any) => item._id === matchId)
-        : resp.data;
+      const response = await apiClient.get<ApiResponse<Match[]>, ApiResponse<Match[]>>(
+        `/matches?matchId=${encodeURIComponent(matchId)}`,
+      );
+      if (!response.success || !Array.isArray(response.data)) {
+        throw new Error(response.message || 'The match could not be loaded');
+      }
+      const m = response.data.find((item) => item._id === matchId);
 
       if (m) {
         setMatch(m);
@@ -77,34 +115,53 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
         const homeId = m.homeTeam?._id || '';
         const awayId = m.awayTeam?._id || '';
-        if (homeId) fetchPlayers(homeId, setHomePlayers);
-        if (awayId) fetchPlayers(awayId, setAwayPlayers);
+        const tournamentId = typeof m.tournamentId === 'string'
+          ? m.tournamentId
+          : m.tournamentId?._id || '';
+        const [homeResult, awayResult] = await Promise.allSettled([
+          homeId && tournamentId
+            ? fetchPlayers(homeId, tournamentId)
+            : Promise.resolve([]),
+          awayId && tournamentId
+            ? fetchPlayers(awayId, tournamentId)
+            : Promise.resolve([]),
+        ]);
+
+        setHomePlayers(homeResult.status === 'fulfilled' ? homeResult.value : []);
+        setAwayPlayers(awayResult.status === 'fulfilled' ? awayResult.value : []);
+        if (homeResult.status === 'rejected' || awayResult.status === 'rejected') {
+          setRosterLoadError('One or both squads could not be loaded. Retry before recording match events.');
+        }
+      } else {
+        throw new Error('Match not found');
       }
-    } catch (err) {
-      toast.error('Failed to fetch match details');
+    } catch (error: unknown) {
+      setMatch(null);
+      setHomePlayers([]);
+      setAwayPlayers([]);
+      setLoadError(getErrorMessage(error, 'Failed to fetch match details'));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchPlayers, matchId]);
 
-  const fetchPlayers = async (teamId: string, setter: (p: Player[]) => void) => {
-    try {
-      const resp: any = await apiClient.get(`/players?teamId=${teamId}&limit=100`);
-      if (resp.success) setter(resp.data);
-    } catch (err) {
-      console.error('Failed to fetch players for team', teamId);
-    }
-  };
+  useEffect(() => {
+    void fetchMatchDetails();
+  }, [fetchMatchDetails]);
 
   // --- OPTIMISTIC EVENT ADD (MAIN GRID) ---
   const handleAddEvent = async (playerId: string, teamId: string) => {
-    if (pendingRef.current) return;
+    if (matchStatus !== 'live' && matchStatus !== 'completed') {
+      toast.error('Start or reopen this match before recording events');
+      return;
+    }
+    if (pendingRef.current || pendingGoalRef.current || isStatusUpdating) return;
 
     // Flash animation immediately
     setFlashPlayerId(playerId);
     setTimeout(() => setFlashPlayerId(null), 800);
 
-    const tempId = `temp_${Date.now()}`;
+    const tempId = `temp_${crypto.randomUUID()}`;
     const allPlayers = [...homePlayers, ...awayPlayers];
     const playerObj = allPlayers.find(p => p._id === playerId);
 
@@ -120,6 +177,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
     // 2. Update UI instantly
     setEvents(prev => [...prev, tempEvent]);
     if (eventMode === 'goal') {
+      // Lock synchronously before React renders so a fast double click cannot
+      // create a second optimistic goal or orphan the first assist prompt.
+      pendingGoalRef.current = true;
       if (teamId === match?.homeTeam._id) setHomeScore(s => s + 1);
       else setAwayScore(s => s + 1);
       
@@ -132,26 +192,27 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
     // Non-Goal logic (Cards): API call immediately
     setLastLoggedEventId(tempId);
-    if (autoAdvance) setCurrentMinute(prev => prev + 1);
+    if (autoAdvance) setCurrentMinute(prev => Math.min(120, prev + 1));
     
     await commitEventToServer(eventMode, teamId, playerId, currentMinute, undefined, tempId);
   };
 
   // --- ATOMIC GOAL FINALIZATION (ASSIST OVERLAY) ---
   const handleFinalizeGoal = async (assistId?: string) => {
-    if (!pendingGoalInfo) return;
+    if (!pendingGoalInfo || pendingRef.current) return;
     const { playerId, teamId, tempId, minute } = pendingGoalInfo;
-    
+
+    pendingGoalRef.current = false;
     setPendingGoalScorer(null);
     setPendingGoalInfo(null);
     
-    if (autoAdvance) setCurrentMinute(prev => prev + 1);
+    if (autoAdvance) setCurrentMinute(prev => Math.min(120, prev + 1));
     
     await commitEventToServer('goal', teamId, playerId, minute, assistId, tempId);
   };
 
   const commitEventToServer = async (
-    type: string, 
+    type: MatchEvent['type'],
     teamId: string, 
     playerId: string, 
     minute: number, 
@@ -160,49 +221,46 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   ) => {
     if (pendingRef.current) return;
     pendingRef.current = true;
+    setIsEventUpdating(true);
 
     try {
       const payload = { type, teamId, playerId, minute, assistPlayerId: assistId || undefined };
-      const resp: any = await apiClient.post(`/matches/${matchId}/events`, payload);
+      const submitEvent = () => apiClient.post<
+          ApiResponse<EventMutationResult>,
+          ApiResponse<EventMutationResult>
+        >(
+          `/matches/${matchId}/events`,
+          payload,
+          { headers: { 'Idempotency-Key': tempId } },
+        );
+      let resp: ApiResponse<EventMutationResult>;
+      try {
+        resp = await submitEvent();
+      } catch (firstError: unknown) {
+        const status = isAxiosError(firstError) ? firstError.response?.status : undefined;
+        if (!isAxiosError(firstError) || (status !== undefined && status < 500)) throw firstError;
+        resp = await submitEvent();
+      }
       
-      if (resp.success && resp.data.events) {
-        setEvents(prev => {
-          const serverEvents = resp.data.events;
-          const otherTemps = prev.filter(e => e._id.startsWith('temp_') && e._id !== tempId);
-          
-          const unresolvedTemps = otherTemps.filter(temp => {
-            return !serverEvents.some((s: any) => 
-              s.type === temp.type && 
-              s.playerId?._id === temp.playerId?._id && 
-              s.minute === temp.minute
-            );
-          });
-
-          const merged = [...serverEvents, ...unresolvedTemps];
-          const seen = new Set();
-          return merged.filter(e => {
-            if (seen.has(e._id)) return false;
-            seen.add(e._id);
-            return true;
-          }).sort((a, b) => a.minute - b.minute);
-        });
-
-        const realEvent = resp.data.events.find((e: any) => 
-          e.type === type && e.playerId?._id === playerId && e.minute === minute
-        ) || resp.data.events[resp.data.events.length - 1];
-        
-        if (realEvent) setLastLoggedEventId(realEvent._id);
-        
+      if (resp.success && resp.data.match.events) {
+        const serverEvents = resp.data.match.events as MatchEvent[];
+        setEvents([...serverEvents].sort((a, b) => a.minute - b.minute));
+        setHomeScore(resp.data.match.homeScore ?? 0);
+        setAwayScore(resp.data.match.awayScore ?? 0);
+        setLastLoggedEventId(resp.data.eventId);
+        onUpdate();
       } else throw new Error();
-    } catch (err: any) {
+    } catch (error: unknown) {
       setEvents(prev => prev.filter(e => e._id !== tempId));
       if (type === 'goal') {
-        if (teamId === match?.homeTeam._id) setHomeScore(s => s - 1);
-        else setAwayScore(s => s - 1);
+        if (teamId === match?.homeTeam._id) setHomeScore(s => Math.max(0, s - 1));
+        else setAwayScore(s => Math.max(0, s - 1));
       }
-      toast.error('Failed to sync event with server');
+      toast.error(getErrorMessage(error, 'Failed to sync event with server'));
     } finally {
       pendingRef.current = false;
+      pendingGoalRef.current = false;
+      setIsEventUpdating(false);
     }
   };
 
@@ -210,29 +268,42 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
     const eventToDelete = events.find(e => e._id === eventId);
     if (!eventToDelete) return;
 
+    if (eventId.startsWith('temp_')) {
+      if (pendingGoalInfo?.tempId !== eventId) return;
+      setEvents(prev => prev.filter(e => e._id !== eventId));
+      if (eventToDelete.teamId === match?.homeTeam._id) {
+        setHomeScore(score => Math.max(0, score - 1));
+      } else {
+        setAwayScore(score => Math.max(0, score - 1));
+      }
+      pendingGoalRef.current = false;
+      setPendingGoalInfo(null);
+      setPendingGoalScorer(null);
+      setLastLoggedEventId(null);
+      return;
+    }
+    if (pendingRef.current || pendingGoalRef.current || isStatusUpdating) return;
+    pendingRef.current = true;
+    setIsEventUpdating(true);
+
     setEvents(prev => prev.filter(e => e._id !== eventId));
     if (eventToDelete.type === 'goal') {
-      if (eventToDelete.teamId === match?.homeTeam._id) setHomeScore(s => s - 1);
-      else setAwayScore(s => s - 1);
+      if (eventToDelete.teamId === match?.homeTeam._id) setHomeScore(s => Math.max(0, s - 1));
+      else setAwayScore(s => Math.max(0, s - 1));
     }
     if (lastLoggedEventId === eventId) setLastLoggedEventId(null);
 
     try {
-      const resp: any = await apiClient.delete(`/matches/${matchId}/events/${eventId}`);
+      const resp = await apiClient.delete<ApiResponse<Match>, ApiResponse<Match>>(
+        `/matches/${matchId}/events/${eventId}`,
+      );
       if (resp.success && resp.data.events) {
-        setEvents(prev => {
-          const serverEvents = resp.data.events;
-          const temps = prev.filter(e => e._id.startsWith('temp_'));
-          const merged = [...serverEvents, ...temps];
-          const seen = new Set();
-          return merged.filter(e => {
-            if (seen.has(e._id)) return false;
-            seen.add(e._id);
-            return true;
-          }).sort((a, b) => a.minute - b.minute);
-        });
+        setEvents([...resp.data.events].sort((a: MatchEvent, b: MatchEvent) => a.minute - b.minute));
+        setHomeScore(resp.data.homeScore ?? 0);
+        setAwayScore(resp.data.awayScore ?? 0);
+        onUpdate();
       } else if (!resp.success) throw new Error('Failed');
-    } catch (err) {
+    } catch (error: unknown) {
       setEvents(prev => {
         const updated = [...prev];
         if (!updated.some(e => e._id === eventId)) {
@@ -244,57 +315,136 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         if (eventToDelete.teamId === match?.homeTeam._id) setHomeScore(s => s + 1);
         else setAwayScore(s => s + 1);
       }
-      toast.error('Failed to delete event');
+      toast.error(getErrorMessage(error, 'Failed to delete event'));
+    } finally {
+      pendingRef.current = false;
+      setIsEventUpdating(false);
     }
   };
 
-  const handleStatusUpdate = async (newStatus: string) => {
-    const isKnockout = match && match.stage !== 'league';
-    if (newStatus === 'completed' && isKnockout && homeScore === awayScore) {
-      setShowKnockoutResolve(true);
+  const handleStatusUpdate = async (newStatus: Match['status']) => {
+    if (pendingRef.current || pendingGoalRef.current || isStatusUpdating) {
+      toast.error('Finish the current match event before changing status');
+      return;
+    }
+    const isKnockout = Boolean(match && KNOCKOUT_STAGES.has(match.stage));
+    if (newStatus === 'completed' && isKnockout) {
+      if (homeScore === awayScore) {
+        setShowKnockoutResolve(true);
+        return;
+      }
+
+      const winnerId = homeScore > awayScore ? match!.homeTeam._id : match!.awayTeam._id;
+      await handleSetWinner(winnerId);
       return;
     }
 
+    const previousStatus = matchStatus;
     setIsStatusUpdating(true);
     setMatchStatus(newStatus);
     try {
-      const resp: any = await apiClient.patch(`/matches/${matchId}/status`, { status: newStatus });
+      const resp = await apiClient.patch<ApiResponse<Match>, ApiResponse<Match>>(
+        `/matches/${matchId}/status`,
+        { status: newStatus },
+      );
       if (resp.success) {
+        setMatch(resp.data);
+        setMatchStatus(resp.data.status);
+        setEvents(resp.data.events || []);
+        setHomeScore(resp.data.homeScore ?? 0);
+        setAwayScore(resp.data.awayScore ?? 0);
+        if (newStatus === 'live') {
+          setIsExtraTime(false);
+          setShootoutScore({ home: 0, away: 0 });
+          setShowKnockoutResolve(false);
+          setShowPenaltyPanel(false);
+        }
         toast.success(`Match marked as ${newStatus}`);
         onUpdate();
       } else throw new Error();
-    } catch (err: any) {
-      setMatchStatus(matchStatus);
-      toast.error(err.response?.data?.message || 'Failed to update status');
+    } catch (error: unknown) {
+      setMatchStatus(previousStatus);
+      toast.error(getErrorMessage(error, 'Failed to update status'));
     } finally {
       setIsStatusUpdating(false);
     }
   };
 
-  const handleSetWinner = async (winnerId: string, pens?: { home: number, away: number }) => {
+  const handleReopenForCorrection = () => {
+    if (!window.confirm('Reopen this completed match for correction? Its saved winner and shootout decision will be cleared until the match is completed again.')) return;
+    void handleStatusUpdate('live');
+  };
+
+  const handleCancelMatch = () => {
+    if (!window.confirm('Cancel this match? It can be restored to the schedule later.')) return;
+    void handleStatusUpdate('cancelled');
+  };
+
+  async function handleSetWinner(winnerId: string, pens?: { home: number, away: number }) {
+    if (pendingRef.current || pendingGoalRef.current || isStatusUpdating) return;
     setIsStatusUpdating(true);
     try {
       const payload = { winnerId, isExtraTime, shootoutScore: pens || undefined };
-      const resp: any = await apiClient.patch(`/matches/${matchId}/winner`, payload);
+      const resp = await apiClient.patch<ApiResponse<Match>, ApiResponse<Match>>(
+        `/matches/${matchId}/winner`,
+        payload,
+      );
       if (resp.success) {
-        await apiClient.patch(`/matches/${matchId}/status`, { status: 'completed' });
         toast.success('Knockout match resolved and completed!');
         setShowKnockoutResolve(false);
         setShowPenaltyPanel(false);
         onUpdate();
         onClose();
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to set winner');
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to set winner'));
     } finally {
       setIsStatusUpdating(false);
     }
-  };
+  }
 
-  if (isLoading || !match) return null;
+  if (isLoading || !match) {
+    return (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 font-outfit backdrop-blur-xl">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="match-console-state-title"
+          aria-busy={isLoading}
+          className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#0a0a0a] p-7 text-center shadow-2xl"
+        >
+          <h2 id="match-console-state-title" className="text-xl font-black uppercase italic tracking-tight text-white">
+            {isLoading ? 'Loading match console' : 'Match console unavailable'}
+          </h2>
+          <p className="mt-3 text-xs font-bold leading-relaxed text-neutral-400" role={loadError ? 'alert' : undefined}>
+            {isLoading ? 'Loading the match and both registered squads…' : loadError}
+          </p>
+          {!isLoading && (
+            <div className="mt-6 flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => void fetchMatchDetails()}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const filteredHomePlayers = homePlayers.filter(p => p.name.toLowerCase().includes(homeSearch.toLowerCase()));
   const filteredAwayPlayers = awayPlayers.filter(p => p.name.toLowerCase().includes(awaySearch.toLowerCase()));
+  const canLogEvents = matchStatus === 'live' || matchStatus === 'completed';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 backdrop-blur-xl bg-black/80 font-outfit">
@@ -326,25 +476,67 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
            <div className="flex items-center gap-1.5 sm:gap-2">
               <div className="flex items-center bg-white/5 rounded-xl p-0.5 sm:p-1 border border-white/5">
                 {matchStatus === 'scheduled' && (
-                  <button 
-                    disabled={isStatusUpdating}
-                    onClick={() => handleStatusUpdate('live')}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white transition-all whitespace-nowrap"
-                  >
-                    Start
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
+                      onClick={() => void handleStatusUpdate('live')}
+                      className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
+                    >
+                      Start
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
+                      onClick={handleCancelMatch}
+                      className="px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-red-400 disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                  </>
                 )}
                 {matchStatus === 'live' && (
-                  <button 
-                    disabled={isStatusUpdating}
-                    onClick={() => handleStatusUpdate('completed')}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white transition-all whitespace-nowrap"
+                  <>
+                    <button
+                      type="button"
+                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
+                      onClick={() => void handleStatusUpdate('completed')}
+                      className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
+                    >
+                      End Match
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
+                      onClick={handleCancelMatch}
+                      className="px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-red-400 disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                )}
+                {matchStatus === 'completed' && (
+                  <button
+                    type="button"
+                    disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
+                    onClick={handleReopenForCorrection}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500 hover:text-black transition-all whitespace-nowrap disabled:opacity-40"
                   >
-                    End Match
+                    Reopen
+                  </button>
+                )}
+                {matchStatus === 'cancelled' && (
+                  <button
+                    type="button"
+                    disabled={isStatusUpdating || isEventUpdating}
+                    onClick={() => void handleStatusUpdate('scheduled')}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
+                  >
+                    Restore
                   </button>
                 )}
               </div>
-              <button onClick={onClose} className="h-8 w-8 sm:h-11 sm:w-11 rounded-full bg-white/5 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 shrink-0">
+              <button type="button" onClick={onClose} aria-label="Close match console" className="h-8 w-8 sm:h-11 sm:w-11 rounded-full bg-white/5 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 shrink-0">
                 <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
            </div>
@@ -377,6 +569,19 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
           
            {/* LEFT: Grid Console */}
            <div className={`flex-1 flex flex-col overflow-hidden ${activeTeamTab === 'timeline' ? 'hidden md:flex' : 'flex'}`}>
+             {rosterLoadError && (
+               <div className="flex flex-col gap-2 border-b border-yellow-500/20 bg-yellow-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
+                 <p className="text-[9px] font-black uppercase tracking-widest text-yellow-200">{rosterLoadError}</p>
+                 <button
+                   type="button"
+                   disabled={isLoading}
+                   onClick={() => void fetchMatchDetails()}
+                   className="self-start text-[9px] font-black uppercase tracking-widest text-white underline underline-offset-4 disabled:opacity-40 sm:self-auto"
+                 >
+                   Retry squads
+                 </button>
+               </div>
+             )}
             
              {/* ACTION ZONE: Mode & Minute */}
              <div className="p-3 sm:p-6 bg-white/[0.01] border-b border-white/5 shrink-0">
@@ -391,7 +596,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                     ].map(mode => (
                       <button
                         key={mode.type}
-                        onClick={() => { setEventMode(mode.type as any); setPendingGoalScorer(null); }}
+                        type="button"
+                        disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo)}
+                        onClick={() => setEventMode(mode.type as typeof eventMode)}
                         className={`flex-1 flex items-center justify-center gap-2 px-2 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${
                           eventMode === mode.type 
                           ? mode.type === 'goal' ? 'bg-blue-600 text-white shadow-lg' :
@@ -409,8 +616,8 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                   {/* 2. Minute Controller */}
                   <div className="flex items-center justify-center lg:justify-start gap-4 sm:gap-6">
                      <div className="flex items-center gap-1">
-                        <button onClick={() => setCurrentMinute(Math.max(0, currentMinute - 5))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black">-5</button>
-                        <button onClick={() => setCurrentMinute(Math.max(0, currentMinute - 1))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black">-1</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo)} onClick={() => setCurrentMinute(Math.max(0, currentMinute - 5))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">-5</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo)} onClick={() => setCurrentMinute(Math.max(0, currentMinute - 1))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">-1</button>
                      </div>
                      
                      <div className="relative">
@@ -423,14 +630,16 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      </div>
 
                      <div className="flex items-center gap-1">
-                        <button onClick={() => setCurrentMinute(currentMinute + 1)} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black">+1</button>
-                        <button onClick={() => setCurrentMinute(currentMinute + 5)} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black">+5</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo) || currentMinute >= 120} onClick={() => setCurrentMinute(Math.min(120, currentMinute + 1))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">+1</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo) || currentMinute >= 120} onClick={() => setCurrentMinute(Math.min(120, currentMinute + 5))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">+5</button>
                      </div>
                   </div>
 
                   {/* 3. Settings */}
                   <div className="flex items-center justify-center lg:justify-end gap-6 sm:gap-8 ml-auto">
                      <button 
+                       type="button"
+                       disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo)}
                        onClick={() => setAutoAdvance(!autoAdvance)}
                        className="group flex flex-col items-center gap-1"
                      >
@@ -442,8 +651,10 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      
                      {lastLoggedEventId && (
                        <button 
-                         onClick={() => { handleDeleteEvent(lastLoggedEventId); setLastLoggedEventId(null); }}
-                         className="flex flex-col items-center gap-1 group"
+                         type="button"
+                         disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating}
+                         onClick={() => void handleDeleteEvent(lastLoggedEventId)}
+                         className="flex flex-col items-center gap-1 group disabled:opacity-40"
                        >
                           <span className="text-[8px] font-black uppercase tracking-widest text-neutral-600 group-hover:text-red-500">Undo</span>
                           <div className="h-8 w-8 sm:h-11 sm:w-11 rounded-xl bg-red-600/10 border border-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all shadow-lg group-hover:shadow-red-600/20">
@@ -467,16 +678,17 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                              <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest">Goal Logged!</p>
                              <h4 className="text-sm sm:text-xl font-black text-white italic uppercase tracking-tighter">Who provided the assist?</h4>
                            </div>
-                           <button onClick={() => handleFinalizeGoal()} className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[9px] font-black uppercase tracking-widest">Skip</button>
+                           <button type="button" disabled={isEventUpdating} onClick={() => void handleFinalizeGoal()} className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40">Skip</button>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                            {(homePlayers.some(p => p._id === pendingGoalScorer?._id) ? homePlayers : awayPlayers)
                              .filter(p => p._id !== pendingGoalScorer?._id)
-                             .slice(0, 8)
                              .map(player => (
                              <button
                                key={player._id}
-                               onClick={() => handleFinalizeGoal(player._id)}
+                               type="button"
+                               disabled={isEventUpdating}
+                               onClick={() => void handleFinalizeGoal(player._id)}
                                className="p-2 sm:p-3 rounded-xl bg-white/10 hover:bg-white text-white hover:text-blue-600 transition-all text-center min-w-0"
                              >
                                 <span className="text-[9px] sm:text-[10px] font-black uppercase truncate block">{player.name}</span>
@@ -507,7 +719,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       {filteredHomePlayers.map(p => (
                          <button
                            key={p._id}
-                           onClick={() => handleAddEvent(p._id, match.homeTeam._id)}
+                           type="button"
+                           disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
+                           onClick={() => void handleAddEvent(p._id, match.homeTeam._id)}
                            className={`group relative p-2 sm:p-4 rounded-xl sm:rounded-2xl border transition-all text-left overflow-hidden min-h-[60px] sm:min-h-[80px] flex flex-col justify-end ${
                              flashPlayerId === p._id ? 'bg-green-500 border-green-400 scale-95' :
                              'bg-white/[0.03] border-white/10 hover:bg-white/[0.08] hover:border-white/20 active:scale-95'
@@ -544,7 +758,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       {filteredAwayPlayers.map(p => (
                          <button
                            key={p._id}
-                           onClick={() => handleAddEvent(p._id, match.awayTeam._id)}
+                           type="button"
+                           disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
+                           onClick={() => void handleAddEvent(p._id, match.awayTeam._id)}
                            className={`group relative p-2 sm:p-4 rounded-xl sm:rounded-2xl border transition-all text-left overflow-hidden min-h-[60px] sm:min-h-[80px] flex flex-col justify-end ${
                              flashPlayerId === p._id ? 'bg-green-500 border-green-400 scale-95' :
                              'bg-white/[0.03] border-white/10 hover:bg-white/[0.08] hover:border-white/20 active:scale-95'
@@ -600,7 +816,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                               {ev.playerId?.name}
                             </p>
                             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
-                               <span className="text-[9px] sm:text-[10px] font-black text-blue-500 italic">{ev.minute}'</span>
+                               <span className="text-[9px] sm:text-[10px] font-black text-blue-500 italic">{ev.minute}′</span>
                                <span className="h-0.5 w-0.5 rounded-full bg-neutral-700"></span>
                                <span className="text-[7px] sm:text-[8px] font-bold text-neutral-500 uppercase tracking-widest truncate">
                                  {ev.type.replace('_', ' ')}
@@ -610,8 +826,11 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                          </div>
                          {!ev._id.startsWith('temp_') && (
                            <button 
-                             onClick={() => handleDeleteEvent(ev._id)}
-                             className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white border border-red-500/20"
+                             type="button"
+                             disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
+                             onClick={() => void handleDeleteEvent(ev._id)}
+                             aria-label={`Delete ${ev.type.replace('_', ' ')} by ${ev.playerId?.name ?? 'player'}`}
+                             className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:bg-red-500 hover:text-white border border-red-500/20 disabled:opacity-20"
                            >
                               <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                            </button>
@@ -652,17 +871,19 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
                 <div className="grid grid-cols-1 gap-3 sm:gap-4">
                    <button 
-                     onClick={() => { setIsExtraTime(true); setCurrentMinute(90); setShowKnockoutResolve(false); }}
+                     type="button"
+                     onClick={() => { setIsExtraTime(true); setShowKnockoutResolve(false); }}
                      className="w-full p-4 sm:p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/40 hover:bg-blue-600/5 transition-all text-left flex items-center justify-between group"
                    >
                       <div>
-                         <p className="text-xs sm:text-sm font-black text-white uppercase">Extra Time</p>
-                         <p className="text-[9px] sm:text-[10px] font-bold text-neutral-500 mt-1">Add 30 minutes to decide winner</p>
+                         <p className="text-xs sm:text-sm font-black text-white uppercase">Approved Extra Time</p>
+                         <p className="text-[9px] sm:text-[10px] font-bold text-neutral-500 mt-1">Continue under the competition committee&apos;s approved procedure</p>
                       </div>
                       <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-neutral-700 group-hover:text-blue-500 transition-colors" />
                    </button>
 
                    <button 
+                     type="button"
                      onClick={() => { setShowPenaltyPanel(true); setShowKnockoutResolve(false); }}
                      className="w-full p-4 sm:p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/40 hover:bg-amber-600/5 transition-all text-left flex items-center justify-between group"
                    >
@@ -674,6 +895,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                    </button>
 
                    <button 
+                     type="button"
                      onClick={() => setShowKnockoutResolve(false)}
                      className="w-full py-2 text-[10px] font-black text-neutral-600 uppercase tracking-widest hover:text-white transition-colors"
                    >
@@ -701,6 +923,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       <p className="text-[8px] sm:text-[10px] font-black text-neutral-500 uppercase truncate">{match.homeTeam.name}</p>
                       <input 
                         type="number" 
+                        min={0}
+                        inputMode="numeric"
+                        aria-label={`${match.homeTeam.name} penalty shootout score`}
                         value={shootoutScore.home}
                         onChange={(e) => setShootoutScore({ ...shootoutScore, home: parseInt(e.target.value) || 0 })}
                         className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all"
@@ -714,6 +939,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       <p className="text-[8px] sm:text-[10px] font-black text-neutral-500 uppercase truncate">{match.awayTeam.name}</p>
                       <input 
                         type="number" 
+                        min={0}
+                        inputMode="numeric"
+                        aria-label={`${match.awayTeam.name} penalty shootout score`}
                         value={shootoutScore.away}
                         onChange={(e) => setShootoutScore({ ...shootoutScore, away: parseInt(e.target.value) || 0 })}
                         className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all font-outfit"
@@ -723,6 +951,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                    <button 
+                      type="button"
                       onClick={() => {
                         if (shootoutScore.home === shootoutScore.away) {
                           toast.error('Shootout cannot end in a draw!');
@@ -736,6 +965,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       Confirm Winner
                    </button>
                    <button 
+                      type="button"
                       onClick={() => setShowPenaltyPanel(false)}
                       className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-neutral-400 text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
                    >
@@ -747,7 +977,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         )}
 
         {/* REGULAR KNOCKOUT WINNER (IF NOT LEVEL) */}
-        {matchStatus === 'live' && match.stage !== 'league' && homeScore !== awayScore && (
+        {matchStatus === 'live' && KNOCKOUT_STAGES.has(match.stage) && homeScore !== awayScore && (
           <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 animate-in fade-in slide-in-from-right-4 duration-500">
              <div className="bg-[#0a0a0a]/90 backdrop-blur-xl border border-blue-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xl flex items-center gap-3 sm:gap-4">
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/20">

@@ -1,19 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Clock, Trophy, Zap } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { Trophy, Clock, Zap } from 'lucide-react';
+
+interface BracketTeam {
+  _id: string;
+  name: string;
+}
 
 interface BracketMatch {
   _id: string;
-  homeTeam: { _id: string; name: string };
-  awayTeam: { _id: string; name: string };
+  homeTeam?: BracketTeam | null;
+  awayTeam?: BracketTeam | null;
   homeScore: number;
   awayScore: number;
   status: string;
   date: string;
-  venue: string;
-  winner?: { _id: string; name: string };
+  venue?: string;
+  winner?: string | BracketTeam | null;
   isExtraTime?: boolean;
   shootoutScore?: { home: number; away: number };
 }
@@ -22,163 +27,339 @@ interface BracketData {
   [stage: string]: BracketMatch[];
 }
 
+interface V2BracketSource {
+  type: 'draw_pairing' | 'winner' | 'loser';
+  sourceNodeKey?: string;
+  drawPairingSlot?: number;
+  drawSide?: 'home' | 'away';
+}
+
+interface V2BracketNode {
+  key: string;
+  stage: string;
+  homeSource: V2BracketSource;
+  awaySource: V2BracketSource;
+  homeTeam?: BracketTeam | null;
+  awayTeam?: BracketTeam | null;
+  winnerTeam?: BracketTeam | null;
+  match?: BracketMatch | null;
+}
+
+interface V2BracketState {
+  bracketVersion: 2;
+  stages: Record<string, V2BracketNode[]>;
+}
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+}
+
 interface KnockoutBracketProps {
   tournamentId: string;
-  filterStage?: string; // If provided, only show this stage directly
+  filterStage?: string;
+}
+
+interface BracketResult {
+  tournamentId: string;
+  requestKey: number;
+  bracket: BracketData | null;
+  error: string | null;
 }
 
 const STAGE_LABELS: Record<string, string> = {
   playoff: 'Playoffs',
+  round_of_32: 'Round of 32',
   round_of_16: 'Round of 16',
   quarter_finals: 'Quarter Finals',
   semi_finals: 'Semi Finals',
+  third_place: 'Third Place',
   final: 'Grand Final',
 };
 
-export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutBracketProps) {
-  const [bracket, setBracket] = useState<BracketData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('round_of_16');
+const STAGE_ORDER = [
+  'playoff',
+  'round_of_32',
+  'round_of_16',
+  'quarter_finals',
+  'semi_finals',
+  'third_place',
+  'final',
+];
 
-  useEffect(() => {
-    fetchBracket();
-  }, [tournamentId]);
+function getStageLabel(stage: string) {
+  return STAGE_LABELS[stage] ?? stage.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
 
-  const fetchBracket = async () => {
-    try {
-      const resp: any = await apiClient.get(`/tournaments/${tournamentId}/bracket`);
-      if (resp.success) {
-        setBracket(resp.data);
-        // Default tab: if filterStage is provided, use it; otherwise pick most advanced stage
-        if (!filterStage) {
-          const stages = Object.keys(resp.data).reverse();
-          for (const s of stages) {
-            if (resp.data[s].length > 0) {
-              setActiveTab(s);
-              break;
-            }
-          }
+function sourcePlaceholder(source: V2BracketSource): BracketTeam {
+  if (source.sourceNodeKey) {
+    const [stage, rawSlot] = source.sourceNodeKey.split(':');
+    const result = source.type === 'loser' ? 'Loser' : 'Winner';
+    return {
+      _id: `placeholder:${source.type}:${source.sourceNodeKey}`,
+      name: `${result} of ${getStageLabel(stage)} ${rawSlot || ''}`.trim(),
+    };
+  }
+
+  const drawSide = source.drawSide ? ` ${source.drawSide}` : '';
+  return {
+    _id: `placeholder:draw:${source.drawPairingSlot ?? 0}:${source.drawSide ?? ''}`,
+    name: `Quarter-final pairing ${source.drawPairingSlot ?? ''}${drawSide}`.trim(),
+  };
+}
+
+function normalizeBracketData(value: BracketData | V2BracketState): BracketData {
+  if (!('bracketVersion' in value) || value.bracketVersion !== 2 || !value.stages) {
+    return value as BracketData;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value.stages).map(([stage, nodes]) => [
+      stage,
+      nodes.map((node: V2BracketNode) => {
+        if (node.match) {
+          return {
+            ...node.match,
+            _id: node.match._id || node.key,
+            homeTeam: node.homeTeam ?? node.match.homeTeam ?? sourcePlaceholder(node.homeSource),
+            awayTeam: node.awayTeam ?? node.match.awayTeam ?? sourcePlaceholder(node.awaySource),
+            winner: node.winnerTeam ?? node.match.winner ?? null,
+          };
         }
-      }
-    } catch (err) {
-      console.error('Failed to fetch bracket', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  if (isLoading) return <div className="h-64 flex items-center justify-center text-neutral-500 font-black uppercase tracking-widest text-[10px] animate-pulse">Loading Bracket...</div>;
-  if (!bracket) return null;
+        return {
+          _id: node.key,
+          homeTeam: node.homeTeam ?? sourcePlaceholder(node.homeSource),
+          awayTeam: node.awayTeam ?? sourcePlaceholder(node.awaySource),
+          homeScore: 0,
+          awayScore: 0,
+          status: 'pending',
+          date: '',
+          winner: node.winnerTeam ?? null,
+        } satisfies BracketMatch;
+      }),
+    ]),
+  );
+}
 
-  const MatchCard = ({ match }: { match: BracketMatch }) => {
-    const isCompleted = match.status === 'completed';
-    const homeWinner = isCompleted && match.winner?._id === match.homeTeam?._id;
-    const awayWinner = isCompleted && match.winner?._id === match.awayTeam?._id;
+function getAvailableStages(bracket: BracketData) {
+  const knownStages = STAGE_ORDER.filter((stage) => bracket[stage]?.length > 0);
+  const extraStages = Object.keys(bracket).filter(
+    (stage) => !STAGE_ORDER.includes(stage) && bracket[stage]?.length > 0
+  );
+  return [...knownStages, ...extraStages];
+}
 
-    return (
-      <div className="relative group p-4 rounded-3xl bg-white/[0.02] border border-white/5 backdrop-blur-3xl hover:bg-white/[0.04] hover:border-blue-500/20 transition-all duration-500">
-        <div className="absolute top-2 right-4 text-[7px] font-black uppercase tracking-[0.2em] text-neutral-600">
-          {match.status === 'live' ? '🔴 Live' : match.status === 'completed' ? 'Final Result' : new Date(match.date).toLocaleDateString()}
-        </div>
-        
-        <div className="space-y-3 mt-2">
-          {/* Home Team */}
-          <div className={`flex items-center justify-between transition-all duration-500 ${homeWinner ? 'scale-105' : isCompleted && !homeWinner ? 'opacity-30 blur-[1px]' : ''}`}>
-             <div className="flex items-center gap-3">
-                <div className={`h-8 w-8 rounded-xl bg-black border flex items-center justify-center font-black italic text-[10px] ${homeWinner ? 'text-blue-500 border-blue-500/30' : 'text-neutral-500 border-white/10'}`}>
-                   {match.homeTeam?.name?.charAt(0)}
-                </div>
-                <span className={`text-xs font-black uppercase tracking-tighter ${homeWinner ? 'text-white' : 'text-neutral-400'}`}>{match.homeTeam?.name}</span>
-             </div>
-             <span className={`text-xl font-black italic tracking-tighter ${homeWinner ? 'text-blue-500' : 'text-white'}`}>
-               {isCompleted || match.status === 'live' ? match.homeScore : '-'}
-             </span>
-          </div>
+function getInitialStage(bracket: BracketData) {
+  const stages = getAvailableStages(bracket);
+  const latestMaterializedStage = [...stages].reverse().find((stage) =>
+    bracket[stage].some((match) => match.status !== 'pending' || Boolean(match.date)),
+  );
+  return latestMaterializedStage ?? stages[0] ?? '';
+}
 
-          <div className="h-px bg-white/5 w-full"></div>
+function getWinnerId(winner: BracketMatch['winner']) {
+  if (!winner) return null;
+  return typeof winner === 'string' ? winner : winner._id;
+}
 
-          {/* Away Team */}
-          <div className={`flex items-center justify-between transition-all duration-500 ${awayWinner ? 'scale-105' : isCompleted && !awayWinner ? 'opacity-30 blur-[1px]' : ''}`}>
-             <div className="flex items-center gap-3">
-                <div className={`h-8 w-8 rounded-xl bg-black border flex items-center justify-center font-black italic text-[10px] ${awayWinner ? 'text-blue-500 border-blue-500/30' : 'text-neutral-500 border-white/10'}`}>
-                   {match.awayTeam?.name?.charAt(0)}
-                </div>
-                <span className={`text-xs font-black uppercase tracking-tighter ${awayWinner ? 'text-white' : 'text-neutral-400'}`}>{match.awayTeam?.name}</span>
-             </div>
-             <span className={`text-xl font-black italic tracking-tighter ${awayWinner ? 'text-blue-500' : 'text-white'}`}>
-               {isCompleted || match.status === 'live' ? match.awayScore : '-'}
-             </span>
-          </div>
-        </div>
+function formatMatchDate(date: string) {
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return 'Date TBC';
+  return parsedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
-        {/* Shootout/ET Indicator */}
-        {isCompleted && (match.isExtraTime || match.shootoutScore) && (
-          <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-4 text-[8px] font-black uppercase tracking-widest">
-             {match.isExtraTime && (
-               <div className="flex items-center gap-1.5 text-amber-500">
-                  <Clock className="h-3 w-3" /> (AET)
-               </div>
-             )}
-             {match.shootoutScore && (
-               <div className="flex items-center gap-1.5 text-blue-500">
-                  <Zap className="h-3 w-3" /> PENS: {match.shootoutScore.home}-{match.shootoutScore.away}
-               </div>
-             )}
-          </div>
-        )}
-
-        {isCompleted && (
-          <div className={`absolute -right-1 -bottom-1 h-6 w-6 rounded-lg bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20 z-10 animate-in zoom-in duration-500`}>
-             <Trophy className="h-3 w-3 text-white" />
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const stages = Object.keys(STAGE_LABELS).filter(s => bracket[s]?.length > 0);
-
-  // The active stage to display — either the external filterStage prop or the internal tab selection
-  const displayStage = filterStage || activeTab;
-  const stageMatches = bracket[displayStage] || [];
+function MatchCard({ match }: { match: BracketMatch }) {
+  const isCompleted = match.status === 'completed';
+  const winnerId = getWinnerId(match.winner);
+  const hasWinner = Boolean(winnerId);
+  const homeWinner = isCompleted && winnerId === match.homeTeam?._id;
+  const awayWinner = isCompleted && winnerId === match.awayTeam?._id;
+  const homeName = match.homeTeam?.name || 'To be confirmed';
+  const awayName = match.awayTeam?.name || 'To be confirmed';
 
   return (
-    <div className="font-outfit">
-      {/* Internal stage tabs — only shown when no filterStage is passed (standalone bracket page) */}
-      {!filterStage && (
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-4 hide-scrollbar px-1">
-           {stages.map(s => (
-             <button
-               key={s}
-               onClick={() => setActiveTab(s)}
-               className={`shrink-0 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
-                 activeTab === s 
-                 ? 'bg-blue-600 border-blue-400 text-white shadow-xl shadow-blue-600/20' 
-                 : 'bg-white/5 border-white/5 text-neutral-500 hover:text-white hover:bg-white/10'
-               }`}
-             >
-               {STAGE_LABELS[s]}
-             </button>
-           ))}
+    <article className="group relative rounded-3xl border border-white/5 bg-white/[0.02] p-4 backdrop-blur-3xl transition-all duration-500 hover:border-blue-500/20 hover:bg-white/[0.04]">
+      <div className="mb-4 flex min-h-5 items-center justify-end text-[7px] font-black uppercase tracking-[0.2em] text-neutral-600">
+        {match.status === 'live' ? (
+          <span className="text-red-400" role="status">● Live</span>
+        ) : match.status === 'completed' ? (
+          'Final Result'
+        ) : (
+          formatMatchDate(match.date)
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <div className={`flex min-w-0 items-center justify-between gap-3 transition-all duration-500 ${homeWinner ? 'scale-[1.02]' : isCompleted && hasWinner ? 'opacity-50' : ''}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border bg-black text-[10px] font-black italic ${homeWinner ? 'border-blue-500/30 text-blue-500' : 'border-white/10 text-neutral-500'}`}>
+              {homeName.charAt(0)}
+            </div>
+            <span className={`truncate text-xs font-black uppercase tracking-tighter ${homeWinner ? 'text-white' : 'text-neutral-400'}`} title={homeName}>{homeName}</span>
+          </div>
+          <span className={`shrink-0 text-xl font-black tracking-tighter italic ${homeWinner ? 'text-blue-500' : 'text-white'}`}>
+            {isCompleted || match.status === 'live' ? match.homeScore : '-'}
+          </span>
+        </div>
+
+        <div className="h-px w-full bg-white/5"></div>
+
+        <div className={`flex min-w-0 items-center justify-between gap-3 transition-all duration-500 ${awayWinner ? 'scale-[1.02]' : isCompleted && hasWinner ? 'opacity-50' : ''}`}>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border bg-black text-[10px] font-black italic ${awayWinner ? 'border-blue-500/30 text-blue-500' : 'border-white/10 text-neutral-500'}`}>
+              {awayName.charAt(0)}
+            </div>
+            <span className={`truncate text-xs font-black uppercase tracking-tighter ${awayWinner ? 'text-white' : 'text-neutral-400'}`} title={awayName}>{awayName}</span>
+          </div>
+          <span className={`shrink-0 text-xl font-black tracking-tighter italic ${awayWinner ? 'text-blue-500' : 'text-white'}`}>
+            {isCompleted || match.status === 'live' ? match.awayScore : '-'}
+          </span>
+        </div>
+      </div>
+
+      {isCompleted && (match.isExtraTime || match.shootoutScore) && (
+        <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-white/5 pt-3 text-[8px] font-black uppercase tracking-widest">
+          {match.isExtraTime && (
+            <div className="flex items-center gap-1.5 text-amber-500">
+              <Clock aria-hidden="true" className="h-3 w-3" /> After extra time
+            </div>
+          )}
+          {match.shootoutScore && (
+            <div className="flex items-center gap-1.5 text-blue-500">
+              <Zap aria-hidden="true" className="h-3 w-3" /> Pens: {match.shootoutScore.home}-{match.shootoutScore.away}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Matches Grid */}
+      {isCompleted && hasWinner && (
+        <div aria-hidden="true" className="absolute -bottom-1 -right-1 z-10 flex h-6 w-6 items-center justify-center rounded-lg bg-blue-600 shadow-lg shadow-blue-600/20 animate-in zoom-in duration-500">
+          <Trophy className="h-3 w-3 text-white" />
+        </div>
+      )}
+    </article>
+  );
+}
+
+export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutBracketProps) {
+  const [result, setResult] = useState<BracketResult>({
+    tournamentId: '',
+    requestKey: -1,
+    bracket: null,
+    error: null,
+  });
+  const [requestKey, setRequestKey] = useState(0);
+  const [activeTab, setActiveTab] = useState('');
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchBracket = async () => {
+      try {
+        const response = await apiClient.get<
+          ApiResponse<BracketData | V2BracketState>,
+          ApiResponse<BracketData | V2BracketState>
+        >(`/tournaments/${tournamentId}/bracket`, { signal: controller.signal });
+
+        if (!response.success) {
+          throw new Error(response.message || 'The bracket could not be loaded.');
+        }
+
+        const bracket = response.data && typeof response.data === 'object'
+          ? normalizeBracketData(response.data)
+          : {};
+        setResult({ tournamentId, requestKey, bracket, error: null });
+        setActiveTab(getInitialStage(bracket));
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setResult({
+          tournamentId,
+          requestKey,
+          bracket: null,
+          error: error instanceof Error ? error.message : 'The bracket could not be loaded.',
+        });
+      }
+    };
+
+    void fetchBracket();
+    return () => controller.abort();
+  }, [requestKey, tournamentId]);
+
+  const isLoading = result.tournamentId !== tournamentId || result.requestKey !== requestKey;
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center text-[10px] font-black uppercase tracking-widest text-neutral-500" role="status" aria-live="polite">
+        <span className="animate-pulse motion-reduce:animate-none">Loading bracket...</span>
+      </div>
+    );
+  }
+
+  if (result.error || !result.bracket) {
+    return (
+      <div className="rounded-[32px] border border-white/5 bg-white/[0.01] px-6 py-16 text-center sm:rounded-[40px]">
+        <p className="mb-6 text-xs font-bold text-neutral-500">{result.error || 'The bracket is not available.'}</p>
+        <button
+          type="button"
+          onClick={() => setRequestKey((key) => key + 1)}
+          className="min-h-11 rounded-2xl bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const stages = getAvailableStages(result.bracket);
+  const displayStage = filterStage || activeTab || stages[0] || '';
+  const stageMatches = result.bracket[displayStage] || [];
+
+  return (
+    <div className="font-outfit">
+      {!filterStage && stages.length > 0 && (
+        <div className="mb-8 flex gap-2 overflow-x-auto px-1 pb-4 scrollbar-hide" role="tablist" aria-label="Knockout stages">
+          {stages.map((stage) => {
+            const isActive = displayStage === stage;
+            return (
+              <button
+                key={stage}
+                id={`bracket-tab-${stage}`}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls="bracket-stage-panel"
+                onClick={() => setActiveTab(stage)}
+                className={`min-h-11 shrink-0 rounded-2xl border px-5 py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all sm:px-6 ${
+                  isActive
+                    ? 'border-blue-400 bg-blue-600 text-white shadow-xl shadow-blue-600/20'
+                    : 'border-white/5 bg-white/5 text-neutral-500 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {getStageLabel(stage)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {stageMatches.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-reveal">
-           {stageMatches.map((m) => (
-             <MatchCard key={m._id} match={m} />
-           ))}
+        <div
+          id="bracket-stage-panel"
+          role={filterStage ? undefined : 'tabpanel'}
+          aria-labelledby={!filterStage && displayStage ? `bracket-tab-${displayStage}` : undefined}
+          className="grid grid-cols-1 gap-6 animate-reveal md:grid-cols-2 xl:grid-cols-4"
+        >
+          {stageMatches.map((match) => <MatchCard key={match._id} match={match} />)}
         </div>
       ) : (
-        <div className="text-center py-24 rounded-[40px] border border-white/5 bg-white/[0.01]">
-           <Trophy className="h-12 w-12 text-neutral-800 mx-auto mb-6 opacity-20" />
-           <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.4em] italic leading-loose">
-             {filterStage
-               ? `No ${STAGE_LABELS[filterStage] || filterStage} fixtures have been drawn yet.`
-               : 'Knockout fixtures have not been generated yet.'
-             }
-           </p>
+        <div className="rounded-[32px] border border-white/5 bg-white/[0.01] px-6 py-20 text-center sm:rounded-[40px] sm:py-24">
+          <Trophy aria-hidden="true" className="mx-auto mb-6 h-12 w-12 text-neutral-800 opacity-20" />
+          <p className="text-[10px] font-black uppercase leading-loose tracking-[0.25em] text-neutral-600 italic sm:tracking-[0.4em]">
+            {filterStage
+              ? `No ${getStageLabel(filterStage)} fixtures have been drawn yet.`
+              : 'Knockout fixtures have not been generated yet.'}
+          </p>
         </div>
       )}
     </div>

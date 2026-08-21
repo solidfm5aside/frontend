@@ -5,7 +5,15 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 import { useAuthStore } from '@/store/use-auth-store';
+import type { Admin } from '@/types';
 import { Eye, EyeOff } from 'lucide-react';
+
+interface LoginResponse {
+  success: boolean;
+  data: {
+    admin: Admin;
+  };
+}
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -14,7 +22,10 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
-  const from = searchParams.get('from') || '/admin/dashboard';
+  const requestedPath = searchParams.get('from');
+  const from = requestedPath?.startsWith('/admin/') && !requestedPath.startsWith('//')
+    ? requestedPath
+    : '/admin/dashboard';
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,13 +34,13 @@ function LoginForm() {
     setError('');
 
     try {
-      const response: any = await apiClient.post('/auth/login', { email, password });
+      const response = await apiClient.post<LoginResponse, LoginResponse>('/auth/login', { email, password });
       if (response.success) {
-        setAuth(response.data.admin, response.data.accessToken, response.data.refreshToken);
+        setAuth(response.data.admin);
         window.location.href = from;
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -87,6 +98,8 @@ function LoginForm() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
                     className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -116,15 +129,15 @@ function LoginForm() {
 
           <div className="mt-10 pt-8 border-t border-white/5 text-center">
              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
-                Don't have an account? 
+                Don&apos;t have an account?
                 <Link href="/register" className="ml-2 text-blue-500 hover:text-white transition-colors underline underline-offset-4 decoration-blue-500/30">Apply for Access</Link>
              </p>
           </div>
         </div>
 
         <div className="text-center">
-          <Link href="/admin" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-600 hover:text-white transition-colors">
-             ← Back to Portal
+          <Link href="/" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-600 hover:text-white transition-colors">
+             ← Back to Public Site
           </Link>
         </div>
       </div>

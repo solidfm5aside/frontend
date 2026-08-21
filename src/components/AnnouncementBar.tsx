@@ -11,18 +11,23 @@ interface Announcement {
   isActive: boolean;
 }
 
+interface SettingsResponse {
+  success: boolean;
+  data?: { global_announcement?: Announcement };
+}
+
 export default function AnnouncementBar() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
 
   useEffect(() => {
     const fetchAnnouncement = async () => {
       try {
-        const response: any = await apiClient.get('/settings');
+        const response = await apiClient.get<SettingsResponse, SettingsResponse>('/settings');
         if (response.success && response.data?.global_announcement) {
           setAnnouncement(response.data.global_announcement);
         }
       } catch (error) {
-        console.error('Failed to fetch announcement:', error);
+        console.warn('Announcement is temporarily unavailable:', error);
       }
     };
     fetchAnnouncement();

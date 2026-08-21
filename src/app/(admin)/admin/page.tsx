@@ -1,11 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 
 export default function AdminPage() {
-  const [view, setView] = useState<'selection' | 'login' | 'register'>('selection');
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-black px-6 font-outfit">
       <div className="absolute inset-0 z-0 opacity-20">

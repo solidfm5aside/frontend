@@ -1,9 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import apiClient from '@/lib/api-client';
+
+interface MessageResponse {
+  success: boolean;
+  message?: string;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -13,22 +21,20 @@ export default function RegisterPage() {
   });
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
-  const router = useRouter();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
     setMessage('');
 
     try {
-      const response: any = await apiClient.post('/auth/register', formData);
+      const response = await apiClient.post<MessageResponse, MessageResponse>('/auth/register', formData);
       if (response.success) {
         setStatus('success');
         setMessage(response.message || 'Registration successful. Please wait for admin verification.');
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
       setStatus('error');
-      setMessage(err.message || 'Registration failed');
+      setMessage(getErrorMessage(error, 'Registration failed'));
     }
   };
 
@@ -79,8 +85,9 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 gap-6">
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Full Name</label>
+                <label htmlFor="register-admin-name" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Full Name</label>
                 <input
+                  id="register-admin-name"
                   type="text"
                   required
                   placeholder="John Doe"
@@ -90,8 +97,9 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Work Email</label>
+                <label htmlFor="register-admin-email" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Work Email</label>
                 <input
+                  id="register-admin-email"
                   type="email"
                   required
                   placeholder="admin@solidfm.com"
@@ -101,8 +109,9 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Secure Password</label>
+                <label htmlFor="register-admin-password" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Secure Password</label>
                 <input
+                  id="register-admin-password"
                   type="password"
                   required
                   placeholder="Minimum 8 characters"

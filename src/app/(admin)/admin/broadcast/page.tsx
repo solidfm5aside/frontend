@@ -3,10 +3,15 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
+import type { ApiResponse } from '@/types';
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 export default function BroadcastPage() {
   const [message, setMessage] = useState('');
-  const [subject, setSubject] = useState('Tournament Update - CodeJude Football');
+  const [subject, setSubject] = useState('Tournament Update - SolidFM 5-Aside');
   const [isSending, setIsSending] = useState(false);
 
   const handleBroadcast = async (e: React.FormEvent) => {
@@ -15,7 +20,7 @@ export default function BroadcastPage() {
 
     setIsSending(true);
     try {
-      const response: any = await apiClient.post('/broadcast', { 
+      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>('/broadcast', {
         message, 
         subject 
       });
@@ -26,9 +31,9 @@ export default function BroadcastPage() {
         });
         setMessage('');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Transmission Failed', {
-        description: error.message || 'Could not send broadcast. Check your SMTP settings.'
+        description: getErrorMessage(error, 'Could not send broadcast. Check your SMTP settings.')
       });
     } finally {
       setIsSending(false);
@@ -59,8 +64,9 @@ export default function BroadcastPage() {
           <form onSubmit={handleBroadcast} className="space-y-8">
              <div className="space-y-6">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Email Subject</label>
+                  <label htmlFor="broadcast-subject" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Email Subject</label>
                   <input
+                    id="broadcast-subject"
                     type="text"
                     required
                     value={subject}
@@ -71,8 +77,9 @@ export default function BroadcastPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Compose Message</label>
+                  <label htmlFor="broadcast-message" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Compose Message</label>
                   <textarea
+                    id="broadcast-message"
                     required
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}

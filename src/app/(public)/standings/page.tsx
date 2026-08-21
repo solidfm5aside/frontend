@@ -1,218 +1,414 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, Medal, RefreshCw, User } from 'lucide-react';
 import apiClient from '@/lib/api-client';
-import { User, Medal } from 'lucide-react';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
-import { Tournament, TeamStanding, PlayerStats, ApiResponse } from '@/types';
+import { useSocket } from '@/hooks/use-socket';
+import { ApiResponse, PlayerStats, TeamStanding } from '@/types';
+import { CompetitionGroupKey, GroupedStandings, GroupStandingRow } from '@/types/competition';
 
 type TabType = 'table' | 'statistics';
 
+interface PublicTournament {
+  _id: string;
+  name: string;
+  season: string;
+  startDate: string;
+  status: 'upcoming' | 'ongoing' | 'completed';
+  currentStage: string;
+  formatVersion?: 1 | 2;
+  format?: 'legacy_league' | 'two_group_knockout';
+}
+
+interface RankedLegacyStanding extends TeamStanding {
+  rank?: number;
+}
+
+const EMPTY_GROUPS: GroupedStandings = { A: [], B: [] };
+const GROUP_RANKING_ORDER = [
+  'Points',
+  'Goal difference',
+  'Goals scored',
+  'Head-to-head',
+  'Committee decision',
+] as const;
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function chooseDefaultTournament(tournaments: PublicTournament[]) {
+  const byNewestStart = (left: PublicTournament, right: PublicTournament) =>
+    new Date(right.startDate).getTime() - new Date(left.startDate).getTime();
+
+  for (const status of ['ongoing', 'completed', 'upcoming'] as const) {
+    const tournament = tournaments.filter((item) => item.status === status).sort(byNewestStart)[0];
+    if (tournament) return tournament;
+  }
+  return null;
+}
+
+function tabClassName(active: boolean) {
+  return `shrink-0 border-b-2 px-6 py-4 text-[10px] font-bold uppercase tracking-[0.2em] transition-all md:text-xs ${
+    active ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'
+  }`;
+}
 
 export default function StandingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('table');
-  const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
-  const [standings, setStandings] = useState<TeamStanding[]>([]);
+  const [activeGroup, setActiveGroup] = useState<CompetitionGroupKey>('A');
+  const [tournaments, setTournaments] = useState<PublicTournament[]>([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState('');
+  const [legacyStandings, setLegacyStandings] = useState<RankedLegacyStanding[]>([]);
+  const [groupedStandings, setGroupedStandings] = useState<GroupedStandings>(EMPTY_GROUPS);
   const [topScorers, setTopScorers] = useState<PlayerStats[]>([]);
-
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedTournamentId, setLoadedTournamentId] = useState('');
+  const [tournamentRequestKey, setTournamentRequestKey] = useState(0);
+  const statsRequestSequence = useRef(0);
+  const socket = useSocket();
+
+  const activeTournament = useMemo(
+    () => tournaments.find((tournament) => tournament._id === selectedTournamentId) ?? null,
+    [selectedTournamentId, tournaments],
+  );
+  const isGroupedCompetition = activeTournament?.formatVersion === 2 &&
+    activeTournament.format === 'two_group_knockout';
 
   useEffect(() => {
-    const fetchData = async () => {
+    let cancelled = false;
+
+    const loadTournaments = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        const [standingsRes, scorersRes] = await Promise.all([
-          apiClient.get('/standings') as Promise<ApiResponse<any[]>>,
-          apiClient.get('/standings/top-scorers') as Promise<ApiResponse<PlayerStats[]>>
-        ]);
+        const response = await apiClient.get<ApiResponse<PublicTournament[]>, ApiResponse<PublicTournament[]>>('/tournaments');
+        if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
+        if (cancelled) return;
 
-
-
-        if (standingsRes.success && standingsRes.data.length > 0) {
-          setActiveTournament(standingsRes.data[0].tournamentId);
-          setStandings(standingsRes.data[0].stats);
-        }
-
-        if (scorersRes.success) {
-          setTopScorers(scorersRes.data);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      } finally {
+        setTournaments(response.data);
+        setSelectedTournamentId(chooseDefaultTournament(response.data)?._id ?? '');
+        if (response.data.length === 0) setIsLoading(false);
+      } catch (loadError: unknown) {
+        if (cancelled) return;
+        setTournaments([]);
+        setSelectedTournamentId('');
+        setError(getErrorMessage(loadError, 'Failed to load tournament standings'));
         setIsLoading(false);
       }
     };
-    fetchData();
-  }, []);
 
-  useRevealOnScroll([standings, topScorers, isLoading, activeTab]);
+    void loadTournaments();
+    return () => {
+      cancelled = true;
+    };
+  }, [tournamentRequestKey]);
 
-  if (isLoading) return <FullPageSpinner />;
+  const fetchSelectedTournament = useCallback(async (silent = false) => {
+    if (!activeTournament) return;
+    const requestSequence = ++statsRequestSequence.current;
+    if (silent) setIsRefreshing(true);
+    else setIsLoading(true);
+    if (!silent) setError(null);
+
+    try {
+      const standingsRequest = isGroupedCompetition
+        ? apiClient.get<ApiResponse<GroupedStandings>, ApiResponse<GroupedStandings>>(
+            `/tournaments/${activeTournament._id}/competition/standings`,
+          )
+        : apiClient.get<ApiResponse<RankedLegacyStanding[]>, ApiResponse<RankedLegacyStanding[]>>(
+            `/standings/${activeTournament._id}`,
+          );
+      const [standingsResponse, scorersResponse] = await Promise.all([
+        standingsRequest,
+        apiClient.get<ApiResponse<PlayerStats[]>, ApiResponse<PlayerStats[]>>(
+          `/standings/${activeTournament._id}/top-scorers`,
+        ),
+      ]);
+
+      if (!standingsResponse.success || !scorersResponse.success) {
+        throw new Error('The selected tournament statistics could not be loaded');
+      }
+      if (requestSequence !== statsRequestSequence.current) return;
+
+      if (isGroupedCompetition) {
+        setGroupedStandings(standingsResponse.data as GroupedStandings);
+        setLegacyStandings([]);
+      } else {
+        setLegacyStandings(standingsResponse.data as RankedLegacyStanding[]);
+        setGroupedStandings(EMPTY_GROUPS);
+      }
+      setTopScorers(scorersResponse.data);
+    } catch (loadError: unknown) {
+      if (requestSequence === statsRequestSequence.current && !silent) {
+        setError(getErrorMessage(loadError, 'Failed to load tournament standings'));
+      }
+    } finally {
+      if (requestSequence === statsRequestSequence.current) {
+        setLoadedTournamentId(activeTournament._id);
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }, [activeTournament, isGroupedCompetition]);
+
+  useEffect(() => {
+    if (activeTournament) void fetchSelectedTournament();
+  }, [activeTournament, fetchSelectedTournament]);
+
+  useEffect(() => {
+    if (!socket || !activeTournament) return;
+    const refreshStandings = () => void fetchSelectedTournament(true);
+    socket.on('match:list:updated', refreshStandings);
+    return () => {
+      socket.off('match:list:updated', refreshStandings);
+    };
+  }, [activeTournament, fetchSelectedTournament, socket]);
+
+  const visibleStandings: Array<GroupStandingRow | RankedLegacyStanding> = isGroupedCompetition
+    ? groupedStandings[activeGroup]
+    : legacyStandings;
+
+  useRevealOnScroll([
+    visibleStandings,
+    topScorers,
+    isLoading,
+    activeTab,
+    activeGroup,
+    selectedTournamentId,
+  ]);
+
+  if ((isLoading && !activeTournament) || (activeTournament && loadedTournamentId !== activeTournament._id)) {
+    return <FullPageSpinner />;
+  }
 
   return (
-    <div className="flex flex-col bg-[#0b161c] font-sans text-white min-h-screen">
-      {/* Hero Header - Unified with the Flashscore look */}
-      <section className="relative py-12 md:py-20 px-6 border-b border-white/5 bg-[#00141e]">
-        <div className="container mx-auto max-w-7xl relative z-10 animate-reveal">
-           <h1 className="text-3xl md:text-5xl font-black italic tracking-tighter uppercase mb-4">
-             {activeTournament?.name || 'Tournament'} <span className="text-neutral-500">Standings</span>
-           </h1>
-           <div className="flex items-center gap-3">
-              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-neutral-400">
-                Season {activeTournament?.season || '2024'} • Live Ranking
-              </span>
-           </div>
-        </div>
-      </section>
-
-      {/* Navigation Tabs - High Density */}
-      <section className="sticky top-[72px] z-40 bg-[#00141e]/90 backdrop-blur-md border-b border-white/5">
-        <div className="container mx-auto max-w-7xl px-4 flex justify-start">
-           <button
-             onClick={() => setActiveTab('table')}
-             className={`px-6 py-4 text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] border-b-2 transition-all ${
-               activeTab === 'table' ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'
-             }`}
-           >
-             League Table
-           </button>
-           <button
-             onClick={() => setActiveTab('statistics')}
-             className={`px-6 py-4 text-[10px] md:text-xs font-bold uppercase tracking-[0.2em] border-b-2 transition-all ${
-               activeTab === 'statistics' ? 'border-blue-500 text-white' : 'border-transparent text-neutral-500 hover:text-neutral-300'
-             }`}
-           >
-             Player Statistics
-           </button>
-        </div>
-      </section>
-
-      {/* Main Content Area */}
-      <section className="flex-1">
-        <div className="container mx-auto max-w-7xl">
-          
-          {activeTab === 'table' ? (
-            /* FLASH SCORE TABLE VIEW */
-            <div className="animate-reveal w-full overflow-hidden">
-              <div className="w-full">
-                {/* Table Header - Responsive Grid */}
-                <div className="grid grid-cols-[35px_1fr_40px_55px_45px] md:grid-cols-[50px_1fr_60px_45px_45px_45px_80px_60px_60px] gap-0 bg-[#00141e] px-4 py-3 border-b border-white/5">
-                   <span className="text-[10px] font-bold text-neutral-500 flex items-center gap-1"># <span className="text-[8px] opacity-30">▲</span></span>
-                   <span className="text-[10px] font-bold text-neutral-500 uppercase">Team</span>
-                   <span className="text-[10px] font-bold text-neutral-500 uppercase text-center">MP</span>
-                   <span className="hidden md:block text-[10px] font-bold text-neutral-500 uppercase text-center">W</span>
-                   <span className="hidden md:block text-[10px] font-bold text-neutral-500 uppercase text-center">D</span>
-                   <span className="hidden md:block text-[10px] font-bold text-neutral-500 uppercase text-center">L</span>
-                   <span className="text-[10px] font-bold text-neutral-500 uppercase text-center">G</span>
-                   <span className="hidden md:block text-[10px] font-bold text-neutral-500 uppercase text-center">GD</span>
-                   <span className="text-[10px] font-bold text-neutral-500 uppercase text-center">PTS</span>
-                </div>
-
-                {/* Table Rows */}
-                {standings.length === 0 ? (
-                  <div className="py-20 text-center opacity-30 italic text-sm">No standings data found.</div>
-                ) : (
-                  <div className="divide-y divide-white/[0.03]">
-                    {standings.map((stat, idx) => (
-                      <div 
-                        key={stat.teamId._id} 
-                        className={`grid grid-cols-[35px_1fr_40px_55px_45px] md:grid-cols-[50px_1fr_60px_45px_45px_45px_80px_60px_60px] gap-0 px-4 py-3.5 items-center transition-colors hover:bg-white/[0.04] ${idx % 2 === 0 ? 'bg-[#0b161c]' : 'bg-[#0e1b23]'}`}
-                      >
-                         {/* Rank Badge */}
-                         <div className="flex justify-start">
-                            <div className="h-5 w-5 md:h-6 md:w-6 rounded-full bg-[#0073e6] flex items-center justify-center shadow-lg">
-                               <span className="text-[9px] md:text-[10px] font-black">{idx + 1}.</span>
-                            </div>
-                         </div>
-
-                         {/* Team Info */}
-                         <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                            <TeamAvatar name={stat.teamId.name} logo={stat.teamId.logo} size="xs" />
-                            <span className="text-xs md:text-sm font-bold text-white truncate">{stat.teamId.name}</span>
-                         </div>
-
-                         {/* Stats Columns */}
-                         <span className="text-[11px] md:text-xs font-semibold text-center text-neutral-300">{stat.played}</span>
-                         <span className="hidden md:block text-xs font-semibold text-center text-neutral-300">{stat.won}</span>
-                         <span className="hidden md:block text-xs font-semibold text-center text-neutral-300">{stat.drawn}</span>
-                         <span className="hidden md:block text-xs font-semibold text-center text-neutral-300">{stat.lost}</span>
-                         <span className="text-[11px] md:text-xs font-semibold text-center text-neutral-300">{stat.goalsFor}:{stat.goalsAgainst}</span>
-                         <span className="hidden md:block text-xs font-semibold text-center text-neutral-300">{stat.goalDifference}</span>
-                         <span className="text-xs md:text-sm font-black text-center text-white">{stat.points}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+    <div className="flex min-h-screen flex-col bg-[#0b161c] font-sans text-white">
+      <section className="relative border-b border-white/5 bg-[#00141e] px-5 py-12 md:px-6 md:py-20">
+        <div className="container relative z-10 mx-auto max-w-7xl animate-reveal">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-black italic uppercase tracking-tighter md:text-5xl">
+                {activeTournament?.name || 'Tournament'} <span className="text-neutral-500">Standings</span>
+              </h1>
+              <div className="mt-4 flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400 md:text-xs">
+                  {activeTournament ? `Season ${activeTournament.season} • ${activeTournament.status}` : 'Official rankings'}
+                </span>
+                {isRefreshing ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-400" aria-label="Refreshing standings" /> : null}
               </div>
             </div>
-          ) : (
-            /* PLAYER STATISTICS VIEW - FLASH SCORE STYLE */
-            <div className="animate-reveal max-w-4xl mx-auto py-10 px-4">
-               <div className="bg-[#00141e] border border-white/5 rounded-xl overflow-hidden shadow-2xl">
-                  {/* Stats Header */}
-                  <div className="grid grid-cols-[50px_1fr_60px_60px] md:grid-cols-[50px_1fr_80px_80px] gap-0 bg-[#00141e] px-4 md:px-6 py-4 border-b border-white/5">
-                     <span className="text-[10px] font-bold text-neutral-500">#</span>
-                     <span className="text-[10px] font-bold text-neutral-500 uppercase text-left pl-14">Player / Team</span>
-                     <span className="text-[10px] font-bold text-neutral-500 uppercase text-center">Goals</span>
-                     <span className="text-[10px] font-bold text-neutral-500 uppercase text-center">Assists</span>
-                  </div>
 
-                  {/* Stats Rows */}
-                  {topScorers.length === 0 ? (
-                    <div className="py-20 text-center opacity-30 italic text-sm">No player statistics available.</div>
-                  ) : (
-                    <div className="divide-y divide-white/[0.03]">
-                       {topScorers.map((player, idx) => (
-                          <div 
-                            key={idx} 
-                            className={`grid grid-cols-[50px_1fr_60px_60px] md:grid-cols-[50px_1fr_80px_80px] gap-0 px-4 md:px-6 py-4 items-center transition-colors hover:bg-white/[0.04] ${idx % 2 === 0 ? 'bg-[#0b161c]' : 'bg-[#0e1b23]'}`}
-                          >
-                             <div className="flex justify-start">
-                                <div className="h-6 w-6 rounded-full bg-[#0073e6] flex items-center justify-center">
-                                   <span className="text-[10px] font-black">{idx + 1}.</span>
-                                </div>
-                             </div>
-
-                             <div className="flex items-center gap-4 pl-0 min-w-0">
-                                <div className="h-8 w-8 md:h-9 md:w-9 shrink-0 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-neutral-500">
-                                   <User className="h-4 w-4 md:h-5 md:w-5" />
-                                </div>
-                                <div className="flex flex-col min-w-0">
-                                   <span className="text-xs md:text-sm font-bold text-white truncate">{player.playerId.name}</span>
-                                   <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
-                                      <TeamAvatar name={player.teamId.name} logo={player.teamId.logo} size="xs" />
-                                      <span className="text-[8px] md:text-[9px] font-bold text-neutral-500 uppercase tracking-tight truncate">{player.teamId.name}</span>
-                                   </div>
-                                </div>
-                             </div>
-
-                             <span className="text-base md:text-xl font-black italic text-center text-blue-500">{player.goals}</span>
-                             <span className="text-base md:text-xl font-black italic text-center text-neutral-400">{player.assists}</span>
-                          </div>
-                       ))}
-                    </div>
-                  )}
-               </div>
-            </div>
-          )}
+            {tournaments.length > 0 ? (
+              <div className="w-full space-y-2 lg:w-72">
+                <label htmlFor="standings-tournament" className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Competition</label>
+                <select
+                  id="standings-tournament"
+                  value={selectedTournamentId}
+                  onChange={(event) => {
+                    setSelectedTournamentId(event.target.value);
+                    setActiveGroup('A');
+                  }}
+                  className="w-full rounded-2xl border border-white/10 bg-[#07131a] px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-500 [color-scheme:dark]"
+                >
+                  {tournaments.map((tournament) => (
+                    <option key={tournament._id} value={tournament._id}>
+                      {tournament.name} — {tournament.season} ({tournament.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+          </div>
         </div>
       </section>
 
-      {/* Legend Footer - Simplified */}
-      <section className="py-12 bg-[#00141e]/50 border-t border-white/5">
-         <div className="container mx-auto max-w-7xl px-6 flex flex-wrap gap-8 text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-            <div className="flex items-center gap-3">
-               <div className="h-3 w-3 rounded-full bg-blue-600"></div>
-               <span>Promotion Zone</span>
+      {activeTournament ? (
+        <nav className="sticky top-[72px] z-40 border-b border-white/5 bg-[#00141e]/90 backdrop-blur-md" aria-label="Standings sections">
+          <div className="container mx-auto flex max-w-7xl overflow-x-auto px-4" role="tablist">
+          <button
+            id="standings-table-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'table'}
+            aria-controls="standings-table-panel"
+            onClick={() => setActiveTab('table')}
+            className={tabClassName(activeTab === 'table')}
+          >
+            {isGroupedCompetition ? 'Group Tables' : 'League Table'}
+          </button>
+          <button
+            id="standings-statistics-tab"
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'statistics'}
+            aria-controls="standings-statistics-panel"
+            onClick={() => setActiveTab('statistics')}
+            className={tabClassName(activeTab === 'statistics')}
+          >
+            Player Statistics
+          </button>
+          </div>
+        </nav>
+      ) : null}
+
+      <main className="flex-1">
+        <div className="container mx-auto max-w-7xl">
+          {error ? (
+            <div className="mx-4 my-10 flex flex-col items-center gap-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-8 text-center" role="alert">
+              <AlertCircle className="h-6 w-6 text-red-400" />
+              <p className="text-sm text-red-200">{error}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTournament) void fetchSelectedTournament();
+                  else setTournamentRequestKey((key) => key + 1);
+                }}
+                className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Try again
+              </button>
             </div>
-            <div className="flex items-center gap-3">
-               <div className="h-3 w-3 rounded-full bg-neutral-700"></div>
-               <span>Mid-Table</span>
-            </div>
-         </div>
-      </section>
+          ) : tournaments.length === 0 ? (
+            <div className="mx-4 my-10 rounded-2xl border border-white/5 p-16 text-center text-sm italic text-neutral-600">No tournament has been published yet.</div>
+          ) : activeTab === 'table' ? (
+            <section id="standings-table-panel" role="tabpanel" aria-labelledby="standings-table-tab" className="animate-reveal">
+              {isGroupedCompetition ? (
+                <div className="border-b border-white/5 bg-[#00141e]/60 px-4 py-4 sm:px-6">
+                  <div className="mx-auto flex max-w-5xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex w-fit rounded-2xl border border-white/5 bg-black/20 p-1" role="tablist" aria-label="Tournament groups">
+                      {(['A', 'B'] as CompetitionGroupKey[]).map((groupKey) => (
+                        <button
+                          key={groupKey}
+                          id={`group-${groupKey}-tab`}
+                          type="button"
+                          role="tab"
+                          aria-selected={activeGroup === groupKey}
+                          aria-controls="active-group-standings-panel"
+                          onClick={() => setActiveGroup(groupKey)}
+                          className={`rounded-xl px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors sm:px-8 ${activeGroup === groupKey ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'}`}
+                        >
+                          Group {groupKey}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-400">Top four qualify for the quarter-finals</p>
+                      <ol className="mt-2 flex flex-wrap gap-1.5" aria-label="Group ranking order">
+                        {GROUP_RANKING_ORDER.map((criterion, index) => (
+                          <li key={criterion} className="rounded-full border border-white/5 bg-black/20 px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider text-neutral-500">
+                            {index + 1}. {criterion}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div
+                id={isGroupedCompetition ? 'active-group-standings-panel' : undefined}
+                role={isGroupedCompetition ? 'tabpanel' : undefined}
+                aria-labelledby={isGroupedCompetition ? `group-${activeGroup}-tab` : undefined}
+                className={`overflow-x-auto transition-opacity ${isLoading ? 'opacity-50' : 'opacity-100'}`}
+                aria-busy={isLoading}
+              >
+                <table className="w-full min-w-[720px] border-collapse text-left">
+                  <caption className="sr-only">{isGroupedCompetition ? `Group ${activeGroup}` : 'League'} standings for {activeTournament?.name}</caption>
+                  <thead className="bg-[#00141e]">
+                    <tr className="border-b border-white/5">
+                      {['#', 'Team', 'MP', 'W', 'D', 'L', 'Goals', 'GD', 'PTS'].map((heading, index) => (
+                        <th key={heading} scope="col" className={`px-4 py-3 text-[10px] font-bold uppercase text-neutral-500 ${index > 1 ? 'text-center' : ''}`}>{heading}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03]">
+                    {visibleStandings.map((standing, index) => {
+                      const rank = 'rank' in standing && standing.rank ? standing.rank : index + 1;
+                      const qualifiesForQuarterFinals = isGroupedCompetition && rank <= 4;
+                      return (
+                        <tr key={standing.teamId._id} className={`${index % 2 === 0 ? 'bg-[#0b161c]' : 'bg-[#0e1b23]'} ${isGroupedCompetition && rank === 4 ? 'border-b-2 border-emerald-500/20' : ''} transition-colors hover:bg-white/[0.04]`}>
+                          <td className="px-4 py-3.5">
+                            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black shadow-lg ${qualifiesForQuarterFinals ? 'bg-emerald-600 text-white' : 'bg-[#0073e6] text-white'}`}>{rank}</span>
+                          </td>
+                          <th scope="row" className="px-4 py-3.5">
+                            <span className="flex min-w-0 items-center gap-3">
+                              <TeamAvatar name={standing.teamId.name} logo={standing.teamId.logo} size="xs" />
+                              <span className="max-w-72 truncate text-xs font-bold text-white md:text-sm">{standing.teamId.name}</span>
+                              {qualifiesForQuarterFinals ? <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-emerald-400">QF</span> : null}
+                            </span>
+                          </th>
+                          <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.played}</td>
+                          <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.won}</td>
+                          <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.drawn}</td>
+                          <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.lost}</td>
+                          <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.goalsFor}:{standing.goalsAgainst}</td>
+                          <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.goalDifference}</td>
+                          <td className="px-4 py-3.5 text-center text-sm font-black text-white">{standing.points}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {visibleStandings.length === 0 && !isLoading ? (
+                  <div className="py-20 text-center text-sm italic text-neutral-600">No standings data is available for this {isGroupedCompetition ? 'group' : 'tournament'} yet.</div>
+                ) : null}
+              </div>
+            </section>
+          ) : (
+            <section id="standings-statistics-panel" role="tabpanel" aria-labelledby="standings-statistics-tab" className="animate-reveal px-4 py-10">
+              <div className="mx-auto max-w-4xl overflow-x-auto rounded-xl border border-white/5 bg-[#00141e] shadow-2xl">
+                <table className="w-full min-w-[560px] text-left">
+                  <caption className="sr-only">Top player statistics for {activeTournament?.name}</caption>
+                  <thead>
+                    <tr className="border-b border-white/5">
+                      <th scope="col" className="px-6 py-4 text-[10px] font-bold text-neutral-500">#</th>
+                      <th scope="col" className="px-6 py-4 text-[10px] font-bold uppercase text-neutral-500">Player / Team</th>
+                      <th scope="col" className="px-6 py-4 text-center text-[10px] font-bold uppercase text-neutral-500">Goals</th>
+                      <th scope="col" className="px-6 py-4 text-center text-[10px] font-bold uppercase text-neutral-500">Assists</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03]">
+                    {topScorers.map((player, index) => (
+                      <tr key={player.playerId._id} className={`${index % 2 === 0 ? 'bg-[#0b161c]' : 'bg-[#0e1b23]'} transition-colors hover:bg-white/[0.04]`}>
+                        <td className="px-6 py-4"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0073e6] text-[10px] font-black">{index + 1}</span></td>
+                        <th scope="row" className="px-6 py-4">
+                          <span className="flex min-w-0 items-center gap-4">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-neutral-500"><User className="h-5 w-5" /></span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-bold text-white">{player.playerId.name}</span>
+                              <span className="mt-1 flex items-center gap-1.5">
+                                <TeamAvatar name={player.teamId.name} logo={player.teamId.logo} size="xs" />
+                                <span className="truncate text-[9px] font-bold uppercase text-neutral-500">{player.teamId.name}</span>
+                              </span>
+                            </span>
+                          </span>
+                        </th>
+                        <td className="px-6 py-4 text-center text-xl font-black italic text-blue-500">{player.goals}</td>
+                        <td className="px-6 py-4 text-center text-xl font-black italic text-neutral-400">{player.assists}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {topScorers.length === 0 && !isLoading ? <div className="py-20 text-center text-sm italic text-neutral-600">No player statistics are available yet.</div> : null}
+              </div>
+            </section>
+          )}
+        </div>
+      </main>
+
+      <footer className="border-t border-white/5 bg-[#00141e]/50 py-10">
+        <div className="container mx-auto flex max-w-7xl items-center gap-3 px-6 text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+          <Medal className="h-4 w-4 text-blue-500" />
+          <span>{activeTournament && !isGroupedCompetition ? 'League rankings update from official results.' : 'Rankings use points, goal difference, goals scored, head-to-head, then an explicit committee decision. Only completed group matches count.'}</span>
+        </div>
+      </footer>
     </div>
   );
 }
