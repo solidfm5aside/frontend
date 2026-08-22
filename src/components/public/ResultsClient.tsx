@@ -12,10 +12,20 @@ import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { Match, ApiResponse } from '@/types';
 import {
-  chooseTournament,
+  isMensGroupTournament,
+  isWomensTableTournament,
+  resolvePublicTournament,
+  retainPublicTournament,
+  tournamentDivision,
   tournamentLabel,
   type TournamentSummary,
 } from '@/utils/tournament-selection';
+
+const WOMENS_RESULT_STAGES = [
+  { id: 'all', label: 'All Results' },
+  { id: 'league', label: 'Round Robin' },
+  { id: 'final', label: 'Final' },
+] as const;
 
 export default function ResultsClient() {
   const [matches, setMatches] = useState<Match[]>([]);
@@ -24,6 +34,7 @@ export default function ResultsClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeStage, setActiveStage] = useState<(typeof WOMENS_RESULT_STAGES)[number]['id']>('all');
   const [tournamentRequestKey, setTournamentRequestKey] = useState(0);
   const backgroundRefreshQueued = useRef(false);
   const foregroundRequestPending = useRef(false);
@@ -34,10 +45,9 @@ export default function ResultsClient() {
     () => tournaments.find((tournament) => tournament._id === selectedTournamentId) ?? null,
     [selectedTournamentId, tournaments],
   );
-  const isLegacyTournament = Boolean(activeTournament) && !(
-    activeTournament?.formatVersion === 2 &&
-    activeTournament.format === 'two_group_knockout'
-  );
+  const isMensCompetition = isMensGroupTournament(activeTournament);
+  const isWomensCompetition = isWomensTableTournament(activeTournament);
+  const isLegacyTournament = Boolean(activeTournament) && !isMensCompetition && !isWomensCompetition;
 
   useEffect(() => {
     let cancelled = false;
@@ -53,9 +63,10 @@ export default function ResultsClient() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = chooseTournament(response.data, ['completed', 'upcoming']);
+        const preferredTournament = resolvePublicTournament(response.data, ['completed', 'upcoming']);
         setTournaments(response.data);
         setSelectedTournamentId(preferredTournament?._id ?? '');
+        if (preferredTournament) retainPublicTournament(preferredTournament._id);
         foregroundRequestPending.current = Boolean(preferredTournament);
         if (!preferredTournament) setIsLoading(false);
       } catch (error: unknown) {
@@ -128,15 +139,22 @@ export default function ResultsClient() {
     };
   }, [fetchMatches, socket]);
 
+  const filteredMatches = useMemo(
+    () => isWomensCompetition && activeStage !== 'all'
+      ? matches.filter((match) => match.stage === activeStage)
+      : matches,
+    [activeStage, isWomensCompetition, matches],
+  );
+
   const matchesByDay = useMemo(() => {
     const map: Record<string, Match[]> = {};
-    matches.forEach(m => {
+    filteredMatches.forEach(m => {
       const key = getDayKey(m.date);
       if (!map[key]) map[key] = [];
       map[key].push(m);
     });
     return map;
-  }, [matches]);
+  }, [filteredMatches]);
 
   // RESULTS: Newest days first (Descending)
   const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((a, b) => {
@@ -161,7 +179,7 @@ export default function ResultsClient() {
   const currentDayMatches = selectedDate ? matchesByDay[selectedDate] ?? [] : [];
   const totalDays = sortedDays.length;
 
-  useRevealOnScroll([matches, selectedDate, isLoading, selectedTournamentId]);
+  useRevealOnScroll([filteredMatches, selectedDate, isLoading, selectedTournamentId, activeStage]);
 
   if (isLoading && tournaments.length === 0 && !loadError) return <FullPageSpinner />;
 
@@ -173,7 +191,7 @@ export default function ResultsClient() {
            <h1 className="text-[10px] md:text-sm font-bold uppercase tracking-[0.5em] text-blue-500 mb-6">Match Archives</h1>
            <h2 className="text-4xl font-black italic tracking-tighter uppercase sm:text-8xl lg:text-9xl mb-8 leading-tight">Full <span className="text-neutral-800">Time.</span></h2>
            <p className="max-w-xl mx-auto text-sm md:text-lg text-neutral-400 font-medium italic tracking-widest uppercase">
-             The Ledger of War{activeTournament ? ` • Season ${activeTournament.season}` : ''}
+             The Ledger of War{activeTournament ? ` • Season ${activeTournament.season} • ${tournamentDivision(activeTournament) === 'women' ? 'Women' : 'Men'}` : ''}
            </p>
 
            {tournaments.length > 0 ? (
@@ -189,9 +207,11 @@ export default function ResultsClient() {
                  onChange={(event) => {
                    requestSequence.current += 1;
                    foregroundRequestPending.current = true;
-                   setSelectedTournamentId(event.target.value);
-                   setMatches([]);
+                    setSelectedTournamentId(event.target.value);
+                    retainPublicTournament(event.target.value);
+                    setMatches([]);
                    setSelectedDate(null);
+                   setActiveStage('all');
                    setLoadError(null);
                    setIsLoading(true);
                  }}
@@ -202,6 +222,22 @@ export default function ResultsClient() {
                    </option>
                  ))}
                </Select>
+             </div>
+           ) : null}
+
+           {isWomensCompetition ? (
+             <div className="mt-6 flex items-center justify-start gap-2 overflow-x-auto px-1 pb-2 scrollbar-hide sm:justify-center" aria-label="Women’s result stages">
+               {WOMENS_RESULT_STAGES.map((stage) => (
+                 <button
+                   key={stage.id}
+                   type="button"
+                   aria-pressed={activeStage === stage.id}
+                   onClick={() => setActiveStage(stage.id)}
+                   className={`min-h-11 shrink-0 rounded-2xl border px-5 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${activeStage === stage.id ? 'border-blue-400 bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'border-white/5 bg-white/5 text-neutral-500 hover:bg-white/10 hover:text-white'}`}
+                 >
+                   {stage.label}
+                 </button>
+               ))}
              </div>
            ) : null}
         </div>
@@ -287,7 +323,7 @@ export default function ResultsClient() {
                     >
                       <div className="flex justify-center mb-5 md:mb-10">
                         <span className="px-3 py-1 md:px-4 md:py-1.5 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                          {match.stage?.replace('_', ' ')} • Full Time
+                          {isWomensCompetition && match.stage === 'league' ? 'Round Robin' : match.stage?.replace(/_/g, ' ')} • Full Time
                         </span>
                       </div>
 
@@ -364,7 +400,7 @@ export default function ResultsClient() {
                         <div className="h-1 w-1 rounded-full bg-white/10"></div>
                         <div className="flex items-center gap-1.5 md:gap-2">
                           <Trophy className="h-2.5 w-2.5 md:h-4 md:w-4 text-yellow-400" />
-                          <span className="text-[7px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-600">{match.stage?.replace('_', ' ')}</span>
+                          <span className="text-[7px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-600">{isWomensCompetition && match.stage === 'league' ? 'Round Robin' : match.stage?.replace(/_/g, ' ')}</span>
                         </div>
                       </div>
                     </div>
@@ -381,11 +417,13 @@ export default function ResultsClient() {
         <div className="container mx-auto max-w-5xl text-center reveal-on-scroll px-6 relative z-10">
           <h2 className="text-2xl md:text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight">See the <span className="text-yellow-400">Standings</span></h2>
           <p className="max-w-md mx-auto text-neutral-500 text-xs md:text-sm font-medium mb-12 uppercase tracking-widest leading-relaxed italic">
-            {isLegacyTournament
-              ? 'See how these results have shaped the league table and who is racing for the crown.'
-              : 'See how these results shape the two group tables and the road to the quarter-finals.'}
+            {isWomensCompetition
+              ? 'See how these results shape the women’s single table and the race for the top-two final.'
+              : isLegacyTournament
+                ? 'See how these results have shaped the league table and who is racing for the crown.'
+                : 'See how these results shape the two group tables and the road to the quarter-finals.'}
           </p>
-          <Link href="/standings" className="inline-flex h-16 md:h-24 items-center justify-center rounded-2xl md:rounded-[40px] bg-blue-600 px-10 md:px-16 text-sm md:text-2xl font-black uppercase italic tracking-widest text-white hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-blue-600/40">
+          <Link href={selectedTournamentId ? `/standings?tournament=${encodeURIComponent(selectedTournamentId)}` : '/standings'} className="inline-flex h-16 md:h-24 items-center justify-center rounded-2xl md:rounded-[40px] bg-blue-600 px-10 md:px-16 text-sm md:text-2xl font-black uppercase italic tracking-widest text-white hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-blue-600/40">
             Live Rankings
           </Link>
         </div>

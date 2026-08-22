@@ -19,7 +19,10 @@ import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { Match, ApiResponse } from '@/types';
 import {
-  chooseTournament,
+  isMensGroupTournament,
+  isWomensTableTournament,
+  resolvePublicTournament,
+  retainPublicTournament,
   tournamentLabel,
   type TournamentSummary,
 } from '@/utils/tournament-selection';
@@ -43,6 +46,12 @@ const FIXED_COMPETITION_STAGES = [
   { id: 'final', label: 'Final' },
 ] as const;
 
+const WOMENS_COMPETITION_STAGES = [
+  { id: 'all', label: 'All Stages' },
+  { id: 'league', label: 'Round Robin' },
+  { id: 'final', label: 'Final' },
+] as const;
+
 export default function FixturesClient() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [tournaments, setTournaments] = useState<TournamentSummary[]>([]);
@@ -60,11 +69,13 @@ export default function FixturesClient() {
     () => tournaments.find((tournament) => tournament._id === selectedTournamentId) ?? null,
     [selectedTournamentId, tournaments],
   );
-  const isLegacyTournament = Boolean(activeTournament) && !(
-    activeTournament?.formatVersion === 2 &&
-    activeTournament.format === 'two_group_knockout'
-  );
-  const stageFilters = isLegacyTournament ? LEGACY_STAGES : FIXED_COMPETITION_STAGES;
+  const isMensCompetition = isMensGroupTournament(activeTournament);
+  const isWomensCompetition = isWomensTableTournament(activeTournament);
+  const stageFilters = isWomensCompetition
+    ? WOMENS_COMPETITION_STAGES
+    : isMensCompetition
+      ? FIXED_COMPETITION_STAGES
+      : LEGACY_STAGES;
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +91,10 @@ export default function FixturesClient() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = chooseTournament(response.data, ['upcoming', 'completed']);
+        const preferredTournament = resolvePublicTournament(response.data, ['upcoming', 'completed']);
         setTournaments(response.data);
         setSelectedTournamentId(preferredTournament?._id ?? '');
+        if (preferredTournament) retainPublicTournament(preferredTournament._id);
         foregroundRequestPending.current = Boolean(preferredTournament);
         if (!preferredTournament) setIsLoading(false);
       } catch (error: unknown) {
@@ -217,7 +229,8 @@ export default function FixturesClient() {
                  onChange={(event) => {
                    requestSequence.current += 1;
                    foregroundRequestPending.current = true;
-                   setSelectedTournamentId(event.target.value);
+                    setSelectedTournamentId(event.target.value);
+                    retainPublicTournament(event.target.value);
                    setMatches([]);
                    setSelectedDate(null);
                    setActiveStage('all');
@@ -242,7 +255,7 @@ export default function FixturesClient() {
                   type="button"
                   aria-pressed={activeStage === s.id}
                   onClick={() => setActiveStage(s.id)}
-                  className={`shrink-0 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  className={`min-h-11 shrink-0 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
                     activeStage === s.id 
                     ? 'bg-blue-600 border-blue-400 text-white shadow-xl shadow-blue-600/20' 
                     : 'bg-white/5 border-white/5 text-neutral-500 hover:text-white hover:bg-white/10'
@@ -329,7 +342,7 @@ export default function FixturesClient() {
                         'bg-blue-500/10 text-blue-500 border border-blue-500/20'
                       }`}>
                         {!isGroupStage && <Zap className="h-3 w-3" />}
-                        {match.stage?.replace(/_/g, ' ')}{match.groupKey ? ` • Group ${match.groupKey}${match.groupKey === 'A' ? ' / Pot 1' : ' / Pot 2'}` : ''} • {match.date && match.venue ? match.status : 'schedule TBC'}
+                        {isWomensCompetition && match.stage === 'league' ? 'round robin' : match.stage?.replace(/_/g, ' ')}{!isWomensCompetition && match.groupKey ? ` • Group ${match.groupKey}${match.groupKey === 'A' ? ' / Pot 1' : ' / Pot 2'}` : ''} • {match.date && match.venue ? match.status : 'schedule TBC'}
                       </span>
                     </div>
 

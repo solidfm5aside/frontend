@@ -24,6 +24,7 @@ import { TeamAvatar } from '@/components/ui/TeamAvatar';
 
 type RegistrationStatus = 'pending' | 'registered' | 'withdrawn';
 type TeamFilter = 'all' | 'pending' | 'registered';
+type TeamDivision = 'men' | 'women';
 
 interface Team {
   _id: string;
@@ -32,6 +33,7 @@ interface Team {
   captainName: string;
   contactPhone: string;
   contactEmail: string;
+  division?: TeamDivision;
   registrationStatus: RegistrationStatus;
   logo?: string;
   stadium?: string;
@@ -81,6 +83,7 @@ interface TeamFormData {
   captainName: string;
   contactPhone: string;
   contactEmail: string;
+  division: TeamDivision;
   registrationStatus: RegistrationStatus;
 }
 
@@ -93,6 +96,7 @@ const INITIAL_FORM_DATA: TeamFormData = {
   captainName: '',
   contactPhone: '',
   contactEmail: '',
+  division: 'men',
   registrationStatus: 'registered',
 };
 
@@ -110,6 +114,7 @@ export default function TeamsManagementPage() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TeamFilter>('all');
+  const [divisionFilter, setDivisionFilter] = useState<TeamDivision>('men');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<Pagination>({ total: 0, pages: 1, limit: 10 });
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -130,6 +135,7 @@ export default function TeamsManagementPage() {
   const fetchTeams = useCallback(async (
     page: number,
     currentFilter: TeamFilter,
+    currentDivision: TeamDivision,
     silent = false,
   ) => {
     const requestId = ++latestTeamsRequestRef.current;
@@ -138,7 +144,7 @@ export default function TeamsManagementPage() {
 
     try {
       const response = await apiClient.get<TeamsResponse, TeamsResponse>(
-        '/teams/admin?page=' + page + '&limit=10&registrationStatus=' + currentFilter,
+        '/teams/admin?page=' + page + '&limit=10&registrationStatus=' + currentFilter + '&division=' + currentDivision,
       );
       if (!response.success) throw new Error(response.message || 'Failed to fetch teams');
 
@@ -168,8 +174,8 @@ export default function TeamsManagementPage() {
   }, []);
 
   useEffect(() => {
-    void fetchTeams(currentPage, filter);
-  }, [currentPage, fetchTeams, filter]);
+    void fetchTeams(currentPage, filter, divisionFilter);
+  }, [currentPage, divisionFilter, fetchTeams, filter]);
 
   useEffect(() => () => {
     latestTeamsRequestRef.current += 1;
@@ -184,7 +190,7 @@ export default function TeamsManagementPage() {
   };
 
   const resetForm = () => {
-    setFormData(INITIAL_FORM_DATA);
+    setFormData({ ...INITIAL_FORM_DATA, division: divisionFilter });
     setEditingTeam(null);
     setLogoFile(null);
     setIsSavedLogoRemoved(false);
@@ -197,6 +203,7 @@ export default function TeamsManagementPage() {
   const handleFormToggle = () => {
     if (isSaving) return;
     if (isFormOpen) resetForm();
+    else if (!editingTeam) setFormData((current) => ({ ...current, division: divisionFilter }));
     setIsFormOpen((isOpen) => !isOpen);
   };
 
@@ -223,6 +230,7 @@ export default function TeamsManagementPage() {
       captainName: team.captainName,
       contactPhone: team.contactPhone,
       contactEmail: team.contactEmail,
+      division: team.division === 'women' ? 'women' : 'men',
       registrationStatus: team.registrationStatus,
     });
     setLogoFile(null);
@@ -288,6 +296,7 @@ export default function TeamsManagementPage() {
       payload.append('captainName', formData.captainName.trim());
       payload.append('contactPhone', formData.contactPhone.trim());
       payload.append('contactEmail', formData.contactEmail.trim());
+      payload.append('division', formData.division);
       payload.append('registrationStatus', formData.registrationStatus);
       if (logoFile) payload.append('logo', logoFile);
       else if (editingTeam && isSavedLogoRemoved) payload.append('logo', '');
@@ -299,15 +308,22 @@ export default function TeamsManagementPage() {
 
       toast.success(response.message || `${response.data.name} ${editingTeam ? 'updated' : 'created'} successfully`);
       const wasEditing = Boolean(editingTeam);
+      const savedDivision = formData.division;
+      const savedStatus = formData.registrationStatus;
       resetForm();
       setIsFormOpen(false);
 
-      if (wasEditing) {
-        await fetchTeams(currentPage, filter, true);
+      if (savedDivision !== divisionFilter || (filter !== 'all' && savedStatus !== filter)) {
+        setFilter('all');
+        setDivisionFilter(savedDivision);
+        setCurrentPage(1);
+      } else if (wasEditing) {
+        await fetchTeams(currentPage, filter, divisionFilter, true);
       } else if (filter === 'all' && currentPage === 1) {
-        await fetchTeams(1, 'all', true);
+        await fetchTeams(1, 'all', divisionFilter, true);
       } else {
         setFilter('all');
+        setDivisionFilter(formData.division);
         setCurrentPage(1);
       }
     } catch (error: unknown) {
@@ -330,7 +346,7 @@ export default function TeamsManagementPage() {
       if (response.data?.registrationStatus !== status) {
         throw new Error('The server did not confirm the requested team status. Refresh and try again.');
       }
-      await fetchTeams(currentPage, filter, true);
+      await fetchTeams(currentPage, filter, divisionFilter, true);
       toast.success(response.message || 'Team status updated to ' + status);
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, 'Failed to update team status'));
@@ -351,7 +367,7 @@ export default function TeamsManagementPage() {
       if (teams.length === 1 && currentPage > 1) {
         setCurrentPage((page) => page - 1);
       } else {
-        await fetchTeams(currentPage, filter, true);
+        await fetchTeams(currentPage, filter, divisionFilter, true);
       }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, 'Failed to delete team'));
@@ -372,7 +388,7 @@ export default function TeamsManagementPage() {
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-none">Teams.</h1>
-          <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">Manage Season Registrations</p>
+          <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">Manage Men&apos;s &amp; Women&apos;s Registrations</p>
         </div>
 
         <div className="flex w-full flex-col gap-3 md:w-auto md:items-end">
@@ -388,7 +404,33 @@ export default function TeamsManagementPage() {
             {isFormOpen ? 'Close Form' : 'Add Team'}
           </button>
 
-          <div className="flex max-w-full gap-2 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] p-1.5 scrollbar-hide">
+          <div className="flex max-w-full gap-2 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] p-1.5 scrollbar-hide" aria-label="Team division">
+            {(['men', 'women'] as const).map((division) => (
+              <button
+                key={division}
+                type="button"
+                disabled={isSaving || Boolean(editingTeam)}
+                title={editingTeam ? 'Finish editing this team before changing the division list' : undefined}
+                onClick={() => {
+                  if (division === divisionFilter) return;
+                  setDivisionFilter(division);
+                  setCurrentPage(1);
+                  if (!editingTeam) setFormData((current) => ({ ...current, division }));
+                }}
+                aria-pressed={divisionFilter === division}
+                className={clsx(
+                  'min-h-11 shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-[10px] font-black uppercase tracking-widest transition-all disabled:cursor-not-allowed disabled:opacity-40',
+                  divisionFilter === division
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                    : 'text-neutral-500 hover:text-white',
+                )}
+              >
+                {division === 'men' ? "Men's teams" : "Women's teams"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex max-w-full gap-2 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] p-1.5 scrollbar-hide" aria-label="Registration status">
             {TEAM_FILTERS.map((teamFilter) => (
               <button
                 key={teamFilter}
@@ -399,7 +441,7 @@ export default function TeamsManagementPage() {
                 }}
                 aria-pressed={filter === teamFilter}
                 className={clsx(
-                  'shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-[10px] font-black uppercase tracking-widest transition-all',
+                  'min-h-11 shrink-0 whitespace-nowrap rounded-xl px-5 py-2 text-[10px] font-black uppercase tracking-widest transition-all',
                   filter === teamFilter
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                     : 'text-neutral-500 hover:text-white',
@@ -425,7 +467,7 @@ export default function TeamsManagementPage() {
                 {editingTeam ? `Edit ${editingTeam.name}` : 'New Team Registration'}
               </h2>
               <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                {editingTeam ? 'Update the team identity, venue, contact details, status, or crest.' : 'Enter the team identity, venue, contact details, status, and optional crest.'}
+                {editingTeam ? 'Update the team division, identity, venue, contact details, status, or crest.' : 'Choose the division, then enter the team identity, contact details, status, and optional crest.'}
               </p>
             </div>
             <span className="text-[9px] font-black uppercase tracking-widest text-neutral-600">* Required fields</span>
@@ -492,6 +534,26 @@ export default function TeamsManagementPage() {
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <label htmlFor="team-division" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Competition Division *</label>
+                  <Select
+                    id="team-division"
+                    required
+                    controlSize="large"
+                    fontWeight="normal"
+                    surface="glass"
+                    value={formData.division}
+                    onChange={(event) => setFormData((current) => ({
+                      ...current,
+                      division: event.target.value as TeamDivision,
+                    }))}
+                  >
+                    <option value="men" className="bg-[#0a0a0a]">Men&apos;s division</option>
+                    <option value="women" className="bg-[#0a0a0a]">Women&apos;s division</option>
+                  </Select>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-600">Tournament entry lists only show registered teams from the same division.</p>
+                </div>
+
                 <div className="space-y-2 sm:col-span-2">
                   <label htmlFor="team-name" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Team Name *</label>
                   <input
@@ -658,7 +720,7 @@ export default function TeamsManagementPage() {
       {loadError ? (
         <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400 sm:flex-row sm:items-center sm:justify-between">
           <span>{loadError}</span>
-          <button type="button" onClick={() => void fetchTeams(currentPage, filter)} className="text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4">Try Again</button>
+          <button type="button" onClick={() => void fetchTeams(currentPage, filter, divisionFilter)} className="text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4">Try Again</button>
         </div>
       ) : null}
 
@@ -679,7 +741,7 @@ export default function TeamsManagementPage() {
           <table className="w-full min-w-[860px] border-collapse text-left">
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.02]">
-                <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Squad Name</th>
+                <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Squad Name / Division</th>
                 <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Captain / Contact</th>
                 <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Status</th>
                 <th className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Actions</th>
@@ -699,7 +761,12 @@ export default function TeamsManagementPage() {
                         <TeamAvatar name={team.name} logo={team.logo} size="sm" />
                         <div>
                           <p className="text-sm font-bold tracking-tight text-white">{team.name}</p>
-                          <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-neutral-500">{team.city}</p>
+                          <p className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                            <span>{team.city}</span>
+                            <span className="rounded-full border border-white/5 bg-white/5 px-2 py-0.5 text-[7px] text-neutral-400">
+                              {team.division === 'women' ? "Women's" : "Men's"}
+                            </span>
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -772,7 +839,7 @@ export default function TeamsManagementPage() {
               }) : (
                 <tr>
                   <td colSpan={4} className="px-8 py-20 text-center">
-                    <p className="text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-600">No squads found matching this filter</p>
+                    <p className="text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-600">No {divisionFilter === 'women' ? "women's" : "men's"} squads found matching this filter</p>
                   </td>
                 </tr>
               )}

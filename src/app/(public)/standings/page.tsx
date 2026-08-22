@@ -10,21 +10,31 @@ import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { ApiResponse, PlayerStats, TeamStanding } from '@/types';
 import { CompetitionGroupKey, GroupedStandings, GroupStandingRow } from '@/types/competition';
+import {
+  isMensGroupTournament,
+  isWomensTableTournament,
+  resolvePublicTournament,
+  retainPublicTournament,
+  tournamentDivision,
+  tournamentLabel,
+  type TournamentSummary,
+} from '@/utils/tournament-selection';
 
 type TabType = 'table' | 'statistics';
 
 const STANDINGS_TABS: readonly TabType[] = ['table', 'statistics'];
 const COMPETITION_GROUPS: readonly CompetitionGroupKey[] = ['A', 'B'];
 
-interface PublicTournament {
-  _id: string;
-  name: string;
-  season: string;
-  startDate: string;
-  status: 'upcoming' | 'ongoing' | 'completed';
+interface PublicTournament extends TournamentSummary {
   currentStage: string;
-  formatVersion?: 1 | 2;
-  format?: 'legacy_league' | 'two_group_knockout';
+}
+
+interface WomensStandingsPayload {
+  table: WomensStandingRow[];
+}
+
+interface WomensStandingRow extends Omit<GroupStandingRow, 'groupKey' | 'groupSlot'> {
+  tableSlot: number;
 }
 
 interface RankedLegacyStanding extends TeamStanding {
@@ -42,17 +52,6 @@ const GROUP_RANKING_ORDER = [
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function chooseDefaultTournament(tournaments: PublicTournament[]) {
-  const byNewestStart = (left: PublicTournament, right: PublicTournament) =>
-    new Date(right.startDate).getTime() - new Date(left.startDate).getTime();
-
-  for (const status of ['ongoing', 'completed', 'upcoming'] as const) {
-    const tournament = tournaments.filter((item) => item.status === status).sort(byNewestStart)[0];
-    if (tournament) return tournament;
-  }
-  return null;
 }
 
 function tabClassName(active: boolean) {
@@ -107,6 +106,7 @@ export default function StandingsPage() {
   const [selectedTournamentId, setSelectedTournamentId] = useState('');
   const [legacyStandings, setLegacyStandings] = useState<RankedLegacyStanding[]>([]);
   const [groupedStandings, setGroupedStandings] = useState<GroupedStandings>(EMPTY_GROUPS);
+  const [womensStandings, setWomensStandings] = useState<WomensStandingRow[]>([]);
   const [topScorers, setTopScorers] = useState<PlayerStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -121,8 +121,9 @@ export default function StandingsPage() {
     () => tournaments.find((tournament) => tournament._id === selectedTournamentId) ?? null,
     [selectedTournamentId, tournaments],
   );
-  const isGroupedCompetition = activeTournament?.formatVersion === 2 &&
-    activeTournament.format === 'two_group_knockout';
+  const isGroupedCompetition = isMensGroupTournament(activeTournament);
+  const isWomensCompetition = isWomensTableTournament(activeTournament);
+  const isManagedCompetition = isGroupedCompetition || isWomensCompetition;
 
   useEffect(() => {
     let cancelled = false;
@@ -135,9 +136,10 @@ export default function StandingsPage() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = chooseDefaultTournament(response.data);
+        const preferredTournament = resolvePublicTournament(response.data, ['completed', 'upcoming']);
         setTournaments(response.data);
         setSelectedTournamentId(preferredTournament?._id ?? '');
+        if (preferredTournament) retainPublicTournament(preferredTournament._id);
         foregroundRequestPending.current = Boolean(preferredTournament);
         if (response.data.length === 0) setIsLoading(false);
       } catch (loadError: unknown) {
@@ -171,8 +173,8 @@ export default function StandingsPage() {
     if (!silent) setError(null);
 
     try {
-      const standingsRequest = isGroupedCompetition
-        ? apiClient.get<ApiResponse<GroupedStandings>, ApiResponse<GroupedStandings>>(
+      const standingsRequest = isManagedCompetition
+        ? apiClient.get<ApiResponse<GroupedStandings | WomensStandingsPayload>, ApiResponse<GroupedStandings | WomensStandingsPayload>>(
             `/tournaments/${activeTournament._id}/competition/standings`,
           )
         : apiClient.get<ApiResponse<RankedLegacyStanding[]>, ApiResponse<RankedLegacyStanding[]>>(
@@ -192,10 +194,16 @@ export default function StandingsPage() {
 
       if (isGroupedCompetition) {
         setGroupedStandings(standingsResponse.data as GroupedStandings);
+        setWomensStandings([]);
+        setLegacyStandings([]);
+      } else if (isWomensCompetition) {
+        setWomensStandings((standingsResponse.data as WomensStandingsPayload).table ?? []);
+        setGroupedStandings(EMPTY_GROUPS);
         setLegacyStandings([]);
       } else {
         setLegacyStandings(standingsResponse.data as RankedLegacyStanding[]);
         setGroupedStandings(EMPTY_GROUPS);
+        setWomensStandings([]);
       }
       setTopScorers(scorersResponse.data);
       setError(null);
@@ -217,7 +225,7 @@ export default function StandingsPage() {
         }
       }
     }
-  }, [activeTournament, isGroupedCompetition]);
+  }, [activeTournament, isGroupedCompetition, isManagedCompetition, isWomensCompetition]);
 
   useEffect(() => {
     if (activeTournament) void fetchSelectedTournament();
@@ -232,9 +240,19 @@ export default function StandingsPage() {
     };
   }, [activeTournament, fetchSelectedTournament, socket]);
 
-  const visibleStandings: Array<GroupStandingRow | RankedLegacyStanding> = isGroupedCompetition
+  const visibleStandings: Array<GroupStandingRow | WomensStandingRow | RankedLegacyStanding> = isGroupedCompetition
     ? groupedStandings[activeGroup]
-    : legacyStandings;
+    : isWomensCompetition
+      ? womensStandings
+      : legacyStandings;
+  const womensTableComplete = isWomensCompetition &&
+    womensStandings.length === 3 &&
+    womensStandings.every((standing) => standing.played === 2);
+  const womensRanksAreUnique = new Set(womensStandings.map((standing) => standing.rank)).size === womensStandings.length;
+  const womensRankCounts = new Map<number, number>();
+  for (const standing of womensStandings) {
+    womensRankCounts.set(standing.rank, (womensRankCounts.get(standing.rank) ?? 0) + 1);
+  }
 
   useRevealOnScroll([
     visibleStandings,
@@ -261,7 +279,7 @@ export default function StandingsPage() {
               <div className="mt-4 flex items-center gap-3">
                 <span className="h-2 w-2 rounded-full bg-blue-500 motion-safe:animate-pulse" />
                 <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400 md:text-xs">
-                  {activeTournament ? `Season ${activeTournament.season} • ${activeTournament.status}` : 'Official rankings'}
+                  {activeTournament ? `Season ${activeTournament.season} • ${tournamentDivision(activeTournament) === 'women' ? 'Women' : 'Men'} • ${activeTournament.status}` : 'Official rankings'}
                 </span>
                 {isRefreshing ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-400" aria-label="Refreshing standings" /> : null}
               </div>
@@ -278,6 +296,7 @@ export default function StandingsPage() {
                     statsRequestSequence.current += 1;
                     foregroundRequestPending.current = true;
                     setSelectedTournamentId(event.target.value);
+                    retainPublicTournament(event.target.value);
                     setActiveGroup('A');
                     setError(null);
                     setIsRefreshing(false);
@@ -286,7 +305,7 @@ export default function StandingsPage() {
                 >
                   {tournaments.map((tournament) => (
                     <option key={tournament._id} value={tournament._id}>
-                      {tournament.name} — {tournament.season} ({tournament.status})
+                      {tournamentLabel(tournament)}
                     </option>
                   ))}
                 </Select>
@@ -310,7 +329,7 @@ export default function StandingsPage() {
             onKeyDown={(event) => handleTabListKeyDown(event, STANDINGS_TABS, 'table', setActiveTab)}
             className={tabClassName(activeTab === 'table')}
           >
-            {isGroupedCompetition ? 'Group Tables' : 'League Table'}
+            {isGroupedCompetition ? 'Group Tables' : isWomensCompetition ? 'Women’s League Table' : 'League Table'}
           </button>
           <button
             id="standings-statistics-tab"
@@ -387,6 +406,15 @@ export default function StandingsPage() {
                 </div>
               ) : null}
 
+              {isWomensCompetition ? (
+                <div className="border-b border-white/5 bg-[#00141e]/60 px-4 py-4 sm:px-6">
+                  <div className="mx-auto max-w-5xl">
+                    <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-400">The top two teams qualify for the final</p>
+                    <p className="mt-2 text-[9px] font-bold uppercase tracking-wider text-neutral-500">Each team plays the other two once. There is no return leg or third-place match.</p>
+                  </div>
+                </div>
+              ) : null}
+
               <div
                 id={isGroupedCompetition ? 'active-group-standings-panel' : undefined}
                 role={isGroupedCompetition ? 'tabpanel' : undefined}
@@ -407,16 +435,19 @@ export default function StandingsPage() {
                     {visibleStandings.map((standing, index) => {
                       const rank = 'rank' in standing && standing.rank ? standing.rank : index + 1;
                       const qualifiesForQuarterFinals = isGroupedCompetition && rank <= 4;
+                      const qualifiesForWomensFinal = womensTableComplete && womensRanksAreUnique && rank <= 2;
+                      const womensTiePending = womensTableComplete && (womensRankCounts.get(rank) ?? 0) > 1;
+                      const isQualifier = qualifiesForQuarterFinals || qualifiesForWomensFinal;
                       return (
-                        <tr key={standing.teamId._id} className={`${index % 2 === 0 ? 'bg-[#0b161c]' : 'bg-[#0e1b23]'} ${isGroupedCompetition && rank === 4 ? 'border-b-2 border-emerald-500/20' : ''} transition-colors hover:bg-white/[0.04]`}>
+                        <tr key={standing.teamId._id} className={`${index % 2 === 0 ? 'bg-[#0b161c]' : 'bg-[#0e1b23]'} ${(isGroupedCompetition && rank === 4) || (qualifiesForWomensFinal && rank === 2) ? 'border-b-2 border-emerald-500/20' : ''} transition-colors hover:bg-white/[0.04]`}>
                           <td className="px-4 py-3.5">
-                            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black shadow-lg ${qualifiesForQuarterFinals ? 'bg-emerald-600 text-white' : 'bg-[#0073e6] text-white'}`}>{rank}</span>
+                            <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black shadow-lg ${isQualifier ? 'bg-emerald-600 text-white' : 'bg-[#0073e6] text-white'}`}>{rank}</span>
                           </td>
                           <th scope="row" className="px-4 py-3.5">
                             <span className="flex min-w-0 items-center gap-3">
                               <TeamAvatar name={standing.teamId.name} logo={standing.teamId.logo} size="xs" />
                               <span className="max-w-72 truncate text-xs font-bold text-white md:text-sm">{standing.teamId.name}</span>
-                              {qualifiesForQuarterFinals ? <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-emerald-400">QF</span> : null}
+                              {isQualifier ? <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-emerald-400">{qualifiesForWomensFinal ? 'Final' : 'QF'}</span> : womensTiePending ? <span className="shrink-0 rounded-full bg-orange-500/10 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-orange-300">Tie pending</span> : null}
                             </span>
                           </th>
                           <td className="px-4 py-3.5 text-center text-xs font-semibold text-neutral-300">{standing.played}</td>
@@ -481,7 +512,11 @@ export default function StandingsPage() {
       <footer className="border-t border-white/5 bg-[#00141e]/50 py-10">
         <div className="container mx-auto flex max-w-7xl items-center gap-3 px-6 text-[10px] font-bold uppercase tracking-widest text-neutral-500">
           <Medal className="h-4 w-4 text-blue-500" />
-          <span>{activeTournament && !isGroupedCompetition ? 'League rankings update from official results.' : 'Rankings use points, goal difference, goals scored, head-to-head, then an explicit committee decision. Only completed group matches count.'}</span>
+          <span>{isWomensCompetition
+            ? 'Women’s rankings use points, goal difference, goals scored, head-to-head, then an explicit committee decision. The top two reach the final.'
+            : activeTournament && !isGroupedCompetition
+              ? 'League rankings update from official results.'
+              : 'Rankings use points, goal difference, goals scored, head-to-head, then an explicit committee decision. Only completed group matches count.'}</span>
         </div>
       </footer>
     </div>

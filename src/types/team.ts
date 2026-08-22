@@ -2,6 +2,7 @@ export interface Team {
   _id: string;
   name: string;
   logo?: string;
+  division?: 'men' | 'women';
 }
 
 export interface TeamStanding {

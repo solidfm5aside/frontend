@@ -164,7 +164,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 async function fetchAllRegisteredTeams(): Promise<CompetitionTeamSummary[]> {
   const loadPage = (page: number) =>
     apiClient.get<TeamsResponse, TeamsResponse>(
-      `/teams/admin?page=${page}&limit=${REGISTERED_TEAM_PAGE_SIZE}&registrationStatus=registered`,
+      `/teams/admin?page=${page}&limit=${REGISTERED_TEAM_PAGE_SIZE}&registrationStatus=registered&division=men`,
     );
 
   const firstPage = await loadPage(1);

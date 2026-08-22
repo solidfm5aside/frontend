@@ -46,6 +46,7 @@ interface ArchiveTournament {
   name: string;
   season: string;
   champion?: { name?: string } | null;
+  division?: 'men' | 'women';
 }
 
 interface PublicTeam {
@@ -82,9 +83,12 @@ export default function Home() {
   const [archive, setArchive] = useState<ArchiveTournament[]>([]);
   const [randomTeams, setRandomTeams] = useState<PublicTeam[]>([]);
   const [teamsLoaded, setTeamsLoaded] = useState(false);
+  const [womensTeams, setWomensTeams] = useState<PublicTeam[]>([]);
+  const [womensTeamsLoaded, setWomensTeamsLoaded] = useState(false);
   const [faqs, setFaqs] = useState<LandingFaq[]>([
     { q: "How much is the registration fee?", a: "₦50,000 per team. Each competition squad may register up to 10 players; team officials are managed separately from the player roster." },
-    { q: "What is the tournament format?", a: "Fourteen teams are manually split into two groups of seven. Each team plays every group opponent once, the top four in each group reach the quarter-finals, and there is no third-place match." },
+    { q: "What is the men’s tournament format?", a: "Fourteen men’s teams are manually split into two groups of seven. Each team plays every group opponent once, the top four in each group reach the quarter-finals, and there is no third-place match." },
+    { q: "How does the women’s league work?", a: "Three women’s teams meet once each, so every team plays two matches. The top two in the table play one final, with no return leg or third-place match." },
     { q: "When are the matches played?", a: "Every Saturday and Sunday throughout the tournament period in Enugu." }
   ]);
   const [sponsors, setSponsors] = useState<LandingSponsor[]>([
@@ -113,7 +117,7 @@ export default function Home() {
     // Fetch dynamic teams
     const fetchTeams = async () => {
        try {
-         const response = await apiClient.get('/teams?page=1&limit=100', {
+         const response = await apiClient.get('/teams?page=1&limit=100&division=men', {
            signal: controller.signal,
          }) as unknown as ApiResponse<PublicTeam[]>;
          if (response.success && Array.isArray(response.data)) {
@@ -126,6 +130,21 @@ export default function Home() {
        } finally {
          if (!controller.signal.aborted) setTeamsLoaded(true);
        }
+    };
+
+    const fetchWomensTeams = async () => {
+      try {
+        const response = await apiClient.get('/teams?page=1&limit=10&division=women', {
+          signal: controller.signal,
+        }) as unknown as ApiResponse<PublicTeam[]>;
+        if (response.success && Array.isArray(response.data)) {
+          setWomensTeams(response.data.slice(0, 3));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) console.warn('Women’s team list is temporarily unavailable:', error);
+      } finally {
+        if (!controller.signal.aborted) setWomensTeamsLoaded(true);
+      }
     };
 
     // Fetch dynamic global settings (FAQs and Sponsors)
@@ -150,11 +169,11 @@ export default function Home() {
       }
     };
 
-    void Promise.all([fetchArchive(), fetchTeams(), fetchSettings()]);
+    void Promise.all([fetchArchive(), fetchTeams(), fetchWomensTeams(), fetchSettings()]);
     return () => controller.abort();
   }, []);
 
-  useRevealOnScroll([randomTeams, archive]);
+  useRevealOnScroll([randomTeams, womensTeams, archive]);
 
   const [currentHero, setCurrentHero] = useState(0);
 
@@ -229,7 +248,7 @@ export default function Home() {
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500 ring-4 ring-blue-500/30"></span>
                 </div>
                 <span className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400 drop-shadow-lg transition-colors group-hover:text-blue-200 sm:text-[10px] sm:tracking-[0.3em] md:text-xs md:tracking-[0.4em]">
-                  REGISTRATION FOR <span className="text-white">{currentYear} SEASON</span> IS NOW <span className="text-[#FFD700] animate-pulse drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">LIVE</span>
+                  MEN&apos;S REGISTRATION FOR <span className="text-white">{currentYear} SEASON</span> IS NOW <span className="text-[#FFD700] animate-pulse drop-shadow-[0_0_8px_rgba(255,215,0,0.6)]">LIVE</span>
                 </span>
               </div>
             )}
@@ -249,7 +268,7 @@ export default function Home() {
             
             <div className="mb-12 flex w-full max-w-xl flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
               <Link href="/register-team" className="inline-flex h-16 w-full items-center justify-center rounded-3xl bg-[#FFD700] px-8 text-sm font-black uppercase tracking-widest text-black italic shadow-2xl shadow-yellow-600/20 transition-all hover:scale-105 active:scale-95 motion-reduce:transform-none sm:w-auto md:h-20 md:px-16 md:text-xl">
-                Register Squad
+                Register Men&apos;s Squad
               </Link>
               <Link href="/fixtures" className="flex h-16 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-8 text-base font-bold text-white backdrop-blur-md transition-all hover:bg-white/10 sm:w-auto sm:px-10 sm:text-lg">
                 View Schedule
@@ -265,7 +284,7 @@ export default function Home() {
       <section id="format" className="content-auto relative overflow-hidden border-y border-white/5 bg-neutral-950 px-4 py-24 sm:px-6 md:py-32 lg:py-40">
         <div className="container mx-auto max-w-7xl relative z-10">
           <div className="mb-16 reveal-on-scroll md:mb-24">
-            <h2 className="text-sm font-black uppercase tracking-[0.5em] text-blue-500 mb-8 italic">THE FORMAT</h2>
+            <h2 className="text-sm font-black uppercase tracking-[0.5em] text-blue-500 mb-8 italic">THE MEN&apos;S FORMAT</h2>
             <h3 className="mb-10 text-4xl font-black uppercase leading-[0.9] tracking-tighter text-white italic sm:text-6xl md:text-8xl lg:text-9xl">
               Group Stage. Knockout Road. <br /><span className="text-neutral-800">Maximum Intensity.</span>
             </h3>
@@ -288,6 +307,29 @@ export default function Home() {
                 <p className="text-neutral-500 text-base leading-relaxed font-medium">{item.d}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mt-20 border-t border-white/5 pt-16 reveal-on-scroll md:mt-28 md:pt-20">
+            <p className="text-sm font-black uppercase tracking-[0.5em] text-blue-500 mb-6 italic">THE WOMEN&apos;S FORMAT</p>
+            <h3 className="mb-8 text-4xl font-black uppercase leading-none tracking-tighter text-white italic sm:text-6xl">
+              One Table. <span className="text-neutral-800">One Final.</span>
+            </h3>
+            <p className="max-w-3xl border-l-4 border-blue-600 pl-5 text-base font-medium leading-relaxed text-neutral-500 sm:pl-8 sm:text-lg">
+              Three women&apos;s teams each play the other two once. After those three physical fixtures, the top two teams meet in a single final to decide the champion.
+            </p>
+            <div className="mt-10 grid gap-5 md:grid-cols-3">
+              {[
+                { id: '01', title: 'Three Teams', detail: 'One shared league table with no groups.' },
+                { id: '02', title: 'Single Round', detail: 'Three matches total; two matches per team.' },
+                { id: '03', title: 'Top-Two Final', detail: 'One final, no semi-final and no third-place match.' },
+              ].map((item) => (
+                <div key={item.id} className="rounded-[28px] border border-white/5 bg-white/[0.01] p-7 transition-colors hover:border-blue-500/40 hover:bg-white/[0.03] sm:p-8">
+                  <span className="text-3xl font-black italic text-blue-500">{item.id}</span>
+                  <h4 className="mt-6 text-xl font-black uppercase tracking-tight text-white italic">{item.title}</h4>
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500">{item.detail}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -414,7 +456,7 @@ export default function Home() {
                     <div className="flex justify-between items-start relative z-10">
                        <div>
                           <h4 className="text-2xl font-black italic text-white uppercase tracking-tighter group-hover:text-blue-500 transition-colors">{tourney.name}</h4>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-[#FFD700]">Season {tourney.season}</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-[#FFD700]">Season {tourney.season} • {tourney.division === 'women' ? 'Women' : 'Men'}</span>
                        </div>
                        <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">🏆</div>
                     </div>
@@ -428,7 +470,7 @@ export default function Home() {
                            </div>
                            <div>
                              <span className="text-xl font-bold text-white tracking-tight block leading-none mb-1">{tourney.champion.name || 'Deleted Team'}</span>
-                             <span className="text-[10px] uppercase font-black tracking-widest text-neutral-500">Official tournament champions</span>
+                             <span className="text-[10px] uppercase font-black tracking-widest text-neutral-500">Official {tourney.division === 'women' ? 'women’s' : 'men’s'} tournament champions</span>
                            </div>
                          </div>
                        ) : (
@@ -623,7 +665,7 @@ export default function Home() {
       <section className="content-auto border-y border-white/5 bg-black px-4 py-24 sm:px-6 md:py-32 lg:py-40">
         <div className="container mx-auto max-w-7xl">
           <div className="mb-16 text-center reveal-on-scroll md:mb-24">
-            <h2 className="text-sm font-bold uppercase tracking-[0.4em] text-blue-500 mb-6">Elite Competitors</h2>
+            <h2 className="text-sm font-bold uppercase tracking-[0.4em] text-blue-500 mb-6">Men&apos;s Competitors</h2>
             <h3 className="text-4xl font-black uppercase leading-none tracking-tighter text-white italic sm:text-6xl md:text-8xl">The Enugu <br /><span className="text-[#FFD700]">Guard.</span></h3>
           </div>
 
@@ -673,10 +715,40 @@ export default function Home() {
                 <div className="absolute inset-0 bg-blue-500/10 blur-xl scale-0 group-hover:scale-150 transition-transform duration-700"></div>
                 <span className="text-5xl font-black text-blue-500 group-hover:text-white group-hover:scale-125 transition-all relative z-10">+</span>
               </div>
-              <h4 className="text-center text-base font-black text-blue-500 uppercase tracking-tighter group-hover:text-white transition-colors leading-none">Join Them</h4>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-600 font-black mt-3 italic underline decoration-blue-500/30 underline-offset-4 group-hover:text-blue-400 group-hover:decoration-blue-400 transition-colors">Register Now</p>
+              <h4 className="text-center text-base font-black text-blue-500 uppercase tracking-tighter group-hover:text-white transition-colors leading-none">Join Men&apos;s League</h4>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-600 font-black mt-3 italic underline decoration-blue-500/30 underline-offset-4 group-hover:text-blue-400 group-hover:decoration-blue-400 transition-colors">Men&apos;s Registration</p>
             </Link>
           </div>
+
+          {womensTeams.length > 0 || !womensTeamsLoaded ? (
+            <div className="mt-20 border-t border-white/5 pt-16 md:mt-28 md:pt-20">
+              <div className="mb-12 text-center reveal-on-scroll">
+                <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.4em] text-blue-500">Women&apos;s Competitors</h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-neutral-600">Three teams • one table • top-two final</p>
+              </div>
+              <div className="mx-auto grid max-w-3xl grid-cols-1 gap-10 sm:grid-cols-3">
+                {womensTeams.length > 0 ? womensTeams.map((team, index) => (
+                  <div key={team._id} className={`group flex min-w-0 flex-col items-center transition-transform hover:-translate-y-4 motion-reduce:transform-none reveal-on-scroll stagger-${index + 1}`}>
+                    <div className="relative mb-6 flex h-24 w-24 items-center justify-center overflow-hidden rounded-[28px] border border-white/5 bg-neutral-900 shadow-2xl transition-all group-hover:scale-105 group-hover:border-blue-500 group-hover:bg-blue-600/10 motion-reduce:transform-none sm:h-32 sm:w-32 sm:rounded-[40px]">
+                      {isOptimizableImageUrl(team.logo) && !team.logo.includes('ui-avatars.com') ? (
+                        <Image src={team.logo} alt={team.name} fill sizes="(max-width: 639px) 96px, 128px" className="object-contain p-4 transition-transform duration-500 group-hover:scale-110" />
+                      ) : (
+                        <span className="text-5xl font-black italic text-blue-500 opacity-50">{team.name?.charAt(0) || '?'}</span>
+                      )}
+                    </div>
+                    <h4 className="w-full truncate px-2 text-center text-sm font-black uppercase leading-tight tracking-tighter text-white transition-colors group-hover:text-blue-500 md:text-base">{team.name}</h4>
+                    <p className="mt-2 w-full truncate text-center text-[9px] font-black uppercase tracking-[0.3em] text-neutral-600 italic md:text-[10px]">{team.city || 'Enugu'}</p>
+                  </div>
+                )) : Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="flex flex-col items-center opacity-30 motion-safe:animate-pulse">
+                    <div className="mb-6 h-24 w-24 rounded-[28px] border border-white/5 bg-neutral-900 sm:h-32 sm:w-32 sm:rounded-[40px]"></div>
+                    <div className="mb-2 h-4 w-24 rounded bg-neutral-800"></div>
+                    <div className="h-2 w-16 rounded bg-neutral-900"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -705,10 +777,10 @@ export default function Home() {
              Think You Have <br /><span className="text-[#FFD700]">What It Takes?</span>
            </h2>
            <p className="text-lg md:text-2xl text-neutral-400 font-medium mb-16 max-w-2xl mx-auto leading-relaxed">
-             Register your team. Step onto the pitch. <span className="text-white">Prove your dominance.</span>
+             Men&apos;s team registration is open. Step onto the pitch. <span className="text-white">Prove your dominance.</span>
            </p>
            <Link href="/register-team" className="h-20 md:h-28 w-full md:w-auto inline-flex items-center justify-center rounded-[35px] md:rounded-[45px] bg-blue-600 px-12 md:px-24 text-xl md:text-3xl font-black uppercase italic tracking-widest text-white hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-blue-600/30">
-             Register Squad Now
+             Register Men&apos;s Squad
            </Link>
         </div>
       </section>

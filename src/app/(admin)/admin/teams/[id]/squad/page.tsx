@@ -36,6 +36,7 @@ interface Player {
 interface Team {
   _id: string;
   name: string;
+  division?: 'men' | 'women';
   registrationStatus: string;
 }
 
@@ -84,10 +85,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-async function fetchAllAdminTeams(): Promise<Team[]> {
+async function fetchAllAdminTeams(division: 'men' | 'women'): Promise<Team[]> {
   const fetchPage = async (page: number) => {
     const response = await apiClient.get<TeamsResponse, TeamsResponse>(
-      `/teams/admin?page=${page}&limit=${MAX_TEAM_PAGE_SIZE}&registrationStatus=all`,
+      `/teams/admin?page=${page}&limit=${MAX_TEAM_PAGE_SIZE}&registrationStatus=all&division=${division}`,
     );
     if (!response.success) throw new Error(response.message || 'Failed to load teams');
     return response;
@@ -143,15 +144,22 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
     setLoadError(null);
 
     try {
-      const [teamResponse, playersResponse, teamsResponse] = await Promise.all([
-        apiClient.get<ApiResponse<Team>, ApiResponse<Team>>('/teams/admin/' + encodeURIComponent(id)),
-        apiClient.get<ApiResponse<Player[]>, ApiResponse<Player[]>>('/players/admin?teamId=' + encodeURIComponent(id) + '&limit=100'),
-        fetchAllAdminTeams(),
-      ]);
-
+      const teamRequest = apiClient.get<ApiResponse<Team>, ApiResponse<Team>>(
+        '/teams/admin/' + encodeURIComponent(id),
+      );
+      const playersRequest = apiClient.get<ApiResponse<Player[]>, ApiResponse<Player[]>>(
+        '/players/admin?teamId=' + encodeURIComponent(id) + '&limit=100',
+      );
+      const teamResponse = await teamRequest;
       if (!teamResponse.success) {
         throw new Error(teamResponse.message || 'Failed to load team');
       }
+      const division = teamResponse.data.division === 'women' ? 'women' : 'men';
+      const [playersResponse, teamsResponse] = await Promise.all([
+        playersRequest,
+        fetchAllAdminTeams(division),
+      ]);
+
       if (!playersResponse.success) {
         throw new Error(playersResponse.message || 'Failed to load players');
       }
@@ -404,6 +412,9 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
             {team.name} <span className="text-blue-500 not-italic">Squad.</span>
           </h1>
           <StatusBadge status={team.registrationStatus} />
+          <span className="rounded-full border border-white/5 bg-white/5 px-3 py-1 text-[8px] font-black uppercase tracking-widest text-neutral-400">
+            {team.division === 'women' ? "Women's division" : "Men's division"}
+          </span>
         </div>
       </div>
 
@@ -553,7 +564,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                   ))}
                 </Select>
                 <p id="destination-team-help" className="text-[9px] font-bold uppercase leading-relaxed tracking-widest text-neutral-600">
-                  Choose another team to transfer this player. Destination roster and tournament locks are checked when you save.
+                  Only {team.division === 'women' ? "women's" : "men's"} teams are shown. Destination roster and tournament locks are checked when you save.
                 </p>
                 {destinationTeamId !== id ? (
                   <p role="status" className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-3 text-[10px] font-bold text-orange-200">

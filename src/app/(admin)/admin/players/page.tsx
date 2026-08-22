@@ -16,6 +16,7 @@ interface Player {
   teamId: {
     _id: string;
     name: string;
+    division?: 'men' | 'women';
   } | null;
 }
 
@@ -197,7 +198,12 @@ export default function PlayersDirectoryPage() {
                       </div>
                     </td>
                     <td className="px-4 py-6 md:px-8 md:py-8">
-                      {player.teamId ? <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tight text-neutral-300 transition-colors hover:text-blue-400"><span>{player.teamId.name}</span><ExternalLink className="h-3.5 w-3.5" /></Link> : <span className="text-sm font-bold uppercase text-neutral-600">Unassigned</span>}
+                      {player.teamId ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tight text-neutral-300 transition-colors hover:text-blue-400"><span>{player.teamId.name}</span><ExternalLink className="h-3.5 w-3.5" /></Link>
+                          <span className="rounded-full border border-white/5 bg-white/5 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-neutral-500">{player.teamId.division === 'women' ? 'Women' : 'Men'}</span>
+                        </div>
+                      ) : <span className="text-sm font-bold uppercase text-neutral-600">Unassigned</span>}
                     </td>
                     <td className="px-4 py-6 text-center text-[10px] font-black md:px-8 md:py-8"><span className="rounded-lg bg-white/5 px-2 py-1 text-neutral-500 transition-colors group-hover:text-white">{player.position}</span></td>
                     <td className="px-4 py-6 text-right md:px-8 md:py-8">

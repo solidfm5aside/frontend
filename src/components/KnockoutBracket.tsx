@@ -29,27 +29,28 @@ interface BracketData {
   [stage: string]: BracketMatch[];
 }
 
-interface V2BracketSource {
-  type: 'draw_pairing' | 'winner' | 'loser';
+interface ManagedBracketSource {
+  type: 'draw_pairing' | 'winner' | 'loser' | 'qualification_rank' | string;
   sourceNodeKey?: string;
   drawPairingSlot?: number;
   drawSide?: 'home' | 'away';
+  rank?: number;
 }
 
-interface V2BracketNode {
+interface ManagedBracketNode {
   key: string;
   stage: string;
-  homeSource: V2BracketSource;
-  awaySource: V2BracketSource;
+  homeSource?: ManagedBracketSource;
+  awaySource?: ManagedBracketSource;
   homeTeam?: BracketTeam | null;
   awayTeam?: BracketTeam | null;
   winnerTeam?: BracketTeam | null;
   match?: BracketMatch | null;
 }
 
-interface V2BracketState {
-  bracketVersion: 2;
-  stages: Record<string, V2BracketNode[]>;
+interface ManagedBracketState {
+  bracketVersion: number;
+  stages: Record<string, ManagedBracketNode[]>;
 }
 
 interface ApiResponse<T> {
@@ -61,6 +62,7 @@ interface ApiResponse<T> {
 interface KnockoutBracketProps {
   tournamentId: string;
   filterStage?: string;
+  finalOnly?: boolean;
 }
 
 interface BracketResult {
@@ -94,14 +96,25 @@ function getStageLabel(stage: string) {
   return STAGE_LABELS[stage] ?? stage.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
-function sourcePlaceholder(source: V2BracketSource): BracketTeam {
-  if (source.sourceNodeKey) {
+function sourcePlaceholder(source?: ManagedBracketSource): BracketTeam {
+  if (source?.sourceNodeKey) {
     const [stage, rawSlot] = source.sourceNodeKey.split(':');
     const result = source.type === 'loser' ? 'Loser' : 'Winner';
     return {
       _id: `placeholder:${source.type}:${source.sourceNodeKey}`,
       name: `${result} of ${getStageLabel(stage)} ${rawSlot || ''}`.trim(),
     };
+  }
+
+  if (source?.type === 'qualification_rank' && source.rank) {
+    return {
+      _id: `placeholder:qualification:${source.rank}`,
+      name: `League rank ${source.rank}`,
+    };
+  }
+
+  if (!source) {
+    return { _id: 'placeholder:tbc', name: 'To be confirmed' };
   }
 
   const drawSide = source.drawSide ? ` ${source.drawSide}` : '';
@@ -111,15 +124,15 @@ function sourcePlaceholder(source: V2BracketSource): BracketTeam {
   };
 }
 
-function normalizeBracketData(value: BracketData | V2BracketState): BracketData {
-  if (!('bracketVersion' in value) || value.bracketVersion !== 2 || !value.stages) {
+function normalizeBracketData(value: BracketData | ManagedBracketState): BracketData {
+  if (!('stages' in value) || !value.stages || typeof value.stages !== 'object') {
     return value as BracketData;
   }
 
   return Object.fromEntries(
-    Object.entries(value.stages).map(([stage, nodes]) => [
+    Object.entries(value.stages).filter(([, nodes]) => Array.isArray(nodes)).map(([stage, nodes]) => [
       stage,
-      nodes.map((node: V2BracketNode) => {
+      nodes.map((node: ManagedBracketNode) => {
         if (node.match) {
           return {
             ...node.match,
@@ -294,7 +307,7 @@ function MatchCard({ match }: { match: BracketMatch }) {
   );
 }
 
-export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutBracketProps) {
+export default function KnockoutBracket({ tournamentId, filterStage, finalOnly = false }: KnockoutBracketProps) {
   const [result, setResult] = useState<BracketResult>({
     tournamentId: '',
     requestKey: -1,
@@ -310,8 +323,8 @@ export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutB
     const fetchBracket = async () => {
       try {
         const response = await apiClient.get<
-          ApiResponse<BracketData | V2BracketState>,
-          ApiResponse<BracketData | V2BracketState>
+          ApiResponse<BracketData | ManagedBracketState>,
+          ApiResponse<BracketData | ManagedBracketState>
         >(`/tournaments/${tournamentId}/bracket`, { signal: controller.signal });
 
         if (!response.success) {
@@ -369,7 +382,7 @@ export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutB
   return (
     <div className="font-outfit">
       {!filterStage && stages.length > 0 && (
-        <div className="mb-8 flex gap-2 overflow-x-auto px-1 pb-4 scrollbar-hide" role="tablist" aria-label="Knockout stages">
+        <div className="mb-8 flex gap-2 overflow-x-auto px-1 pb-4 scrollbar-hide" role="tablist" aria-label={finalOnly ? 'Championship stage' : 'Knockout stages'}>
           {stages.map((stage) => {
             const isActive = displayStage === stage;
             return (
@@ -411,7 +424,9 @@ export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutB
           <p className="text-[10px] font-black uppercase leading-loose tracking-[0.25em] text-neutral-600 italic sm:tracking-[0.4em]">
             {filterStage
               ? `No official ${getStageLabel(filterStage)} fixtures have been recorded yet.`
-              : 'Official knockout fixtures have not been recorded yet.'}
+              : finalOnly
+                ? 'The official final fixture has not been recorded yet.'
+                : 'Official knockout fixtures have not been recorded yet.'}
           </p>
         </div>
       )}

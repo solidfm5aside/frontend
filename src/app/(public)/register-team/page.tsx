@@ -99,6 +99,7 @@ export default function RegisterTeamPage() {
       data.append('captainName', formData.captainName);
       data.append('contactPhone', formData.contactPhone);
       data.append('contactEmail', formData.contactEmail);
+      data.append('division', 'men');
       if (logoFile) data.append('logo', logoFile);
 
       const response = await apiClient.post<RegistrationResponse, RegistrationResponse>('/teams/register', data);
@@ -152,7 +153,7 @@ export default function RegisterTeamPage() {
           </h2>
           <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-6 sm:p-8 backdrop-blur-xl">
             <p className="text-sm font-medium text-neutral-400 leading-relaxed mb-6">
-              There are currently no upcoming or ongoing tournament seasons accepting registrations.
+              Men&apos;s team registration is currently closed. Women&apos;s teams are entered directly by the competition administrators.
             </p>
             <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest leading-loose">
               Please check back later.
@@ -201,9 +202,9 @@ export default function RegisterTeamPage() {
             SFM
           </Link>
           <h2 className="text-4xl md:text-6xl font-black italic tracking-tighter text-white uppercase">
-            Register your <span className="text-blue-500 not-italic">Squad.</span>
+            Register your Men&apos;s <span className="text-blue-500 not-italic">Squad.</span>
           </h2>
-          <p className="mt-4 text-xs md:text-sm font-bold text-neutral-500 uppercase tracking-[0.3em]">Join the SolidFM 5-A-Side Elite</p>
+          <p className="mt-4 text-xs md:text-sm font-bold text-neutral-500 uppercase tracking-[0.3em]">Public registration is for the men&apos;s competition</p>
         </div>
 
         <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-6 md:p-12 backdrop-blur-3xl shadow-2xl">
@@ -272,7 +273,7 @@ export default function RegisterTeamPage() {
         </div>
 
         <p className="text-center text-[10px] font-bold text-neutral-600 uppercase tracking-[0.3em] leading-relaxed max-w-lg mx-auto">
-          Registration cost is ₦50,000 per team. By submitting, you agree to the tournament rules and participant code of conduct.
+          Men&apos;s registration costs ₦50,000 per team. Women&apos;s teams are entered by administrators. By submitting, you agree to the tournament rules and participant code of conduct.
         </p>
       </div>
     </div>

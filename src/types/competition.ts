@@ -1,4 +1,5 @@
 export type CompetitionGroupKey = 'A' | 'B';
+export type CompetitionDivision = 'men' | 'women';
 export type CompetitionTieBreaker =
   | 'points'
   | 'goal_difference'
@@ -13,6 +14,7 @@ export interface CompetitionTeamSummary {
   name: string;
   logo?: string;
   city?: string;
+  division?: CompetitionDivision;
   registrationStatus?: 'pending' | 'registered' | 'withdrawn';
 }
 
@@ -68,6 +70,7 @@ export interface CompetitionEntry {
   teamLogoSnapshot?: string;
   groupKey?: CompetitionGroupKey;
   groupSlot?: number;
+  tableSlot?: number;
   status: 'active' | 'withdrawn';
 }
 

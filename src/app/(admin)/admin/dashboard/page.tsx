@@ -24,14 +24,16 @@ interface UpcomingTournament {
   status: string;
   startDate: string;
   currentStage: string;
-  formatVersion?: 1 | 2;
-  format?: 'legacy_league' | 'two_group_knockout';
+  formatVersion?: 1 | 2 | 3;
+  format?: 'legacy_league' | 'two_group_knockout' | 'single_table_final';
+  division?: 'men' | 'women';
 }
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [upcomingTournament, setUpcomingTournament] = useState<UpcomingTournament | null>(null);
+  const [womensTournament, setWomensTournament] = useState<UpcomingTournament | null>(null);
   const { admin } = useAuthStore();
   const canManageTournaments = admin?.role === 'admin' || admin?.role === 'super_admin';
 
@@ -51,11 +53,17 @@ export default function DashboardPage() {
       try {
         const res = await apiClient.get<ApiResponse<UpcomingTournament[]>, ApiResponse<UpcomingTournament[]>>('/tournaments');
         if (res.success) {
-          const pending = res.data.find((tournament) => tournament.status === 'ongoing') ??
-            res.data.find((tournament) => tournament.status === 'upcoming');
+          setUpcomingTournament(null);
+          setWomensTournament(null);
+          const mensTournaments = res.data.filter((tournament) => tournament.division !== 'women');
+          const pending = mensTournaments.find((tournament) => tournament.status === 'ongoing') ??
+            mensTournaments.find((tournament) => tournament.status === 'upcoming');
+          const women = res.data.find((tournament) => tournament.division === 'women' && tournament.status === 'ongoing') ??
+            res.data.find((tournament) => tournament.division === 'women' && tournament.status === 'upcoming');
           if (pending) {
             setUpcomingTournament(pending);
           }
+          if (women) setWomensTournament(women);
         }
       } catch (e) {
         console.error('Failed to fetch upcoming tournament:', e);
@@ -70,9 +78,10 @@ export default function DashboardPage() {
 
   const isV2Competition = upcomingTournament?.formatVersion === 2 &&
     upcomingTournament.format === 'two_group_knockout';
+  const dashboardTournament = upcomingTournament ?? womensTournament;
 
   const statCards = [
-    { name: 'Total Teams', value: stats?.totalTeams || 0, icon: '🛡️', color: 'text-blue-500' },
+    { name: 'All Teams • Both Divisions', value: stats?.totalTeams || 0, icon: '🛡️', color: 'text-blue-500' },
     { name: 'Pending Registrations', value: stats?.pendingTeams || 0, icon: '📝', color: 'text-yellow-500' },
     { name: 'Scheduled matches', value: stats?.totalMatches || 0, icon: '⚽', color: 'text-emerald-500' },
     { name: 'Total Players', value: stats?.totalPlayers || 0, icon: '🏃', color: 'text-purple-500' },
@@ -87,7 +96,7 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase">Overview.</h1>
         <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase">
-          {upcomingTournament ? `Season ${upcomingTournament.season} Dashboard` : 'Tournament Dashboard'}
+          {dashboardTournament ? `Season ${dashboardTournament.season} • ${dashboardTournament.division === 'women' ? 'Women' : 'Men'} Dashboard` : 'Tournament Dashboard'}
         </p>
       </div>
 
@@ -164,7 +173,7 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-            ) : (
+            ) : !womensTournament ? (
               <Link href="/admin/tournaments" className="flex items-center justify-between p-6 rounded-2xl bg-blue-600/5 border border-blue-500/20 hover:bg-blue-600/10 transition-all group">
                 <div className="flex items-center gap-4">
                   <span className="text-xl">🏆</span>
@@ -175,7 +184,32 @@ export default function DashboardPage() {
                 </div>
                 <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">→</div>
               </Link>
-            )}
+            ) : null}
+
+            {womensTournament ? (
+              <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 transition-all">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <CalendarDays className="h-5 w-5 text-blue-500" />
+                    <div>
+                      <h4 className="text-sm font-bold uppercase tracking-tighter text-white">Women&apos;s Competition Workflow</h4>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-neutral-500 italic">
+                        {womensTournament.name} — three-team round robin and top-two final
+                      </p>
+                    </div>
+                  </div>
+                  {canManageTournaments ? (
+                    <Link href="/admin/tournaments" className="flex h-9 items-center rounded-xl bg-blue-600 px-5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-500">
+                      Open Women&apos;s Workflow
+                    </Link>
+                  ) : (
+                    <span className="flex h-9 cursor-not-allowed items-center gap-1.5 rounded-xl border border-white/5 bg-white/5 px-4 text-[10px] font-black uppercase tracking-widest text-neutral-600" title="Administrator access is required to manage the women’s competition">
+                      <LockKeyhole className="h-3 w-3" /> Administrator Only
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             <Link href="/admin/matches" className="flex items-center justify-between p-6 rounded-2xl bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-all group">
               <div className="flex items-center gap-4">

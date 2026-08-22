@@ -6,16 +6,17 @@ import apiClient from '@/lib/api-client';
 import KnockoutBracket from '@/components/KnockoutBracket';
 import { Select } from '@/components/ui/Select';
 import { PageSpinner } from '@/components/ui/Spinner';
+import {
+  isMensGroupTournament,
+  isWomensTableTournament,
+  resolvePublicTournament,
+  retainPublicTournament,
+  tournamentLabel,
+  type TournamentSummary,
+} from '@/utils/tournament-selection';
 
-interface Tournament {
-  _id: string;
-  name: string;
-  season: string;
-  startDate: string;
+interface Tournament extends TournamentSummary {
   currentStage: string;
-  status?: 'upcoming' | 'ongoing' | 'completed';
-  formatVersion?: 1 | 2;
-  format?: 'legacy_league' | 'two_group_knockout';
 }
 
 interface ApiResponse<T> {
@@ -30,16 +31,11 @@ interface TournamentResult {
   error: string | null;
 }
 
-function formatStageName(stage: string) {
+function formatStageName(stage: string, womensCompetition = false) {
+  if (womensCompetition && stage === 'group_stage') return 'League Stage';
+  if (womensCompetition && stage === 'qualification_finalized') return 'Finalists Locked';
+  if (womensCompetition && stage === 'knockout_stage') return 'Final Stage';
   return stage.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function chooseBracketTournament(tournaments: Tournament[]) {
-  const newest = (status: Tournament['status']) => tournaments
-    .filter((tournament) => tournament.status === status)
-    .sort((left, right) => new Date(right.startDate).getTime() - new Date(left.startDate).getTime())[0];
-
-  return newest('ongoing') ?? newest('completed') ?? newest('upcoming') ?? tournaments[0];
 }
 
 export default function BracketPage() {
@@ -68,7 +64,9 @@ export default function BracketPage() {
         setResult({ requestKey, tournaments, error: null });
         setSelectedId((currentId) => {
           if (tournaments.some((tournament) => tournament._id === currentId)) return currentId;
-          return chooseBracketTournament(tournaments)?._id ?? '';
+          const preferred = resolvePublicTournament(tournaments, ['completed', 'upcoming']);
+          if (preferred) retainPublicTournament(preferred._id);
+          return preferred?._id ?? '';
         });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -104,8 +102,8 @@ export default function BracketPage() {
   }
 
   const selectedTournament = result.tournaments.find((tournament) => tournament._id === selectedId);
-  const isFixedCompetition = selectedTournament?.formatVersion === 2 &&
-    selectedTournament.format === 'two_group_knockout';
+  const isMensCompetition = isMensGroupTournament(selectedTournament);
+  const isWomensCompetition = isWomensTableTournament(selectedTournament);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 font-outfit animate-reveal sm:px-6 md:py-20">
@@ -116,7 +114,7 @@ export default function BracketPage() {
             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-neutral-500">Live Bracket</span>
           </div>
           <h1 className="text-4xl font-black uppercase leading-none tracking-tighter text-white italic sm:text-5xl md:text-7xl">
-            Knockout <br /> <span className="text-blue-600">Roadmap.</span>
+            {isWomensCompetition ? 'Championship' : 'Knockout'} <br /> <span className="text-blue-600">Roadmap.</span>
           </h1>
         </div>
 
@@ -131,12 +129,15 @@ export default function BracketPage() {
               optionSurface="black"
               surface="glass"
               value={selectedId}
-              onChange={(event) => setSelectedId(event.target.value)}
+              onChange={(event) => {
+                setSelectedId(event.target.value);
+                retainPublicTournament(event.target.value);
+              }}
               className="border-white/10 uppercase tracking-widest sm:min-w-[280px] [@media(pointer:fine)]:text-xs"
             >
               {result.tournaments.map((tournament) => (
                 <option key={tournament._id} value={tournament._id} className="bg-black text-white">
-                  {tournament.name} (S{tournament.season})
+                  {tournamentLabel(tournament)}
                 </option>
               ))}
             </Select>
@@ -145,7 +146,7 @@ export default function BracketPage() {
       </div>
 
       {selectedId ? (
-        <KnockoutBracket tournamentId={selectedId} />
+        <KnockoutBracket tournamentId={selectedId} finalOnly={isWomensCompetition} />
       ) : (
         <div className="rounded-[32px] border border-white/5 bg-white/[0.01] px-6 py-20 text-center sm:rounded-[40px]">
           <Trophy aria-hidden="true" className="mx-auto mb-6 h-12 w-12 text-neutral-800 opacity-20" />
@@ -158,9 +159,11 @@ export default function BracketPage() {
           <div className="max-w-md">
             <h2 className="mb-2 text-xl font-black uppercase tracking-tighter text-white italic">Tournament Rules</h2>
             <p className="text-[10px] font-bold uppercase leading-relaxed tracking-wider text-neutral-500">
-              {selectedTournament && !isFixedCompetition
-                ? 'This legacy edition follows its originally published knockout stages and pairings.'
-                : 'The confirmed format has two seven-team groups. The top four in each group qualify, then the quarter-final pairings agreed through the physical process are recorded here. The semi-finals and final follow the official bracket, with no third-place match.'}
+              {isWomensCompetition
+                ? 'The three women’s teams meet once in a single table. The top two then play one physically scheduled final to decide the champion. There is no semi-final or third-place match.'
+                : selectedTournament && !isMensCompetition
+                  ? 'This legacy edition follows its originally published knockout stages and pairings.'
+                  : 'The confirmed men’s format has two seven-team groups. The top four in each group qualify, then the quarter-final pairings agreed through the physical process are recorded here. The semi-finals and final follow the official bracket, with no third-place match.'}
             </p>
           </div>
           <div className="flex w-full flex-wrap items-center gap-5 sm:w-auto sm:flex-nowrap sm:gap-6">
@@ -170,8 +173,8 @@ export default function BracketPage() {
             </div>
             <div aria-hidden="true" className="h-8 w-px bg-white/5"></div>
             <div className="min-w-0 text-center">
-              <div className="max-w-28 truncate text-sm font-black text-white italic sm:text-base" title={selectedTournament?.currentStage ? formatStageName(selectedTournament.currentStage) : undefined}>
-                {selectedTournament?.currentStage ? formatStageName(selectedTournament.currentStage) : 'Pending'}
+              <div className="max-w-28 truncate text-sm font-black text-white italic sm:text-base" title={selectedTournament?.currentStage ? formatStageName(selectedTournament.currentStage, isWomensCompetition) : undefined}>
+                {selectedTournament?.currentStage ? formatStageName(selectedTournament.currentStage, isWomensCompetition) : 'Pending'}
               </div>
               <div className="text-[8px] font-black uppercase tracking-widest text-neutral-600">Current Stage</div>
             </div>

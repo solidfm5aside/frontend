@@ -7,7 +7,9 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/store/use-auth-store';
 import { Plus, CheckCircle2, RefreshCw, CalendarDays, AlertCircle, Flame, Clock, Archive, LockKeyhole, Trophy } from 'lucide-react';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { Select } from '@/components/ui/Select';
 import { V2CompetitionPanel } from '@/components/admin/V2CompetitionPanel';
+import { WomensCompetitionPanel } from '@/components/admin/WomensCompetitionPanel';
 
 interface Tournament {
   _id: string;
@@ -17,8 +19,9 @@ interface Tournament {
   status: 'upcoming' | 'ongoing' | 'completed';
   fixturesGenerated: boolean;
   currentStage: string;
-  formatVersion?: 1 | 2;
-  format?: 'legacy_league' | 'two_group_knockout';
+  formatVersion?: 1 | 2 | 3;
+  format?: 'legacy_league' | 'two_group_knockout' | 'single_table_final';
+  division?: 'men' | 'women';
 }
 
 interface TournamentCardProps {
@@ -58,12 +61,36 @@ const STAGES = [
   { key: 'final', label: 'Final' },
 ];
 
-const NEW_TOURNAMENT_RULES = [
-  'Single-leg group stage • 42 matches',
-  'Top four per group qualify',
-  'Physical quarter-final pairings recorded by admin',
-  'Maximum 10 players • No third place',
-] as const;
+const NEW_TOURNAMENT_RULES = {
+  men: [
+    '14 men’s teams • two groups of seven',
+    'Single-leg group stage • 42 matches',
+    'Top four per group • physical knockout record',
+    'Maximum 10 players • no third place',
+  ],
+  women: [
+    'Exactly three women’s teams • one table',
+    'Single round robin • three matches total',
+    'Each team plays twice • top two reach final',
+    'Physical fixture record • no third place',
+  ],
+} as const;
+
+interface NewTournamentDraft {
+  name: string;
+  season: string;
+  startDate: string;
+  endDate: string;
+  division: 'men' | 'women';
+}
+
+const EMPTY_TOURNAMENT_DRAFT: NewTournamentDraft = {
+  name: '',
+  season: '',
+  startDate: '',
+  endDate: '',
+  division: 'men',
+};
 
 function SectionHeader({ icon, label, count, color }: SectionHeaderProps) {
   return (
@@ -228,7 +255,8 @@ export default function TournamentsManagementPage() {
   const [isTournamentCatalogueCurrent, setIsTournamentCatalogueCurrent] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSubmittingTournament, setIsSubmittingTournament] = useState(false);
-  const [newTournament, setNewTournament] = useState({ name: '', season: '', startDate: '', endDate: '' });
+  const [newTournament, setNewTournament] = useState<NewTournamentDraft>(EMPTY_TOURNAMENT_DRAFT);
+  const [selectedWomensTournamentId, setSelectedWomensTournamentId] = useState('');
   const tournamentRequestSequence = useRef(0);
 
   const { admin } = useAuthStore();
@@ -244,7 +272,8 @@ export default function TournamentsManagementPage() {
       if (!response.success) throw new Error(response.message || 'Tournament catalogue could not be loaded');
 
       const legacyOngoing = response.data.filter(
-        (tournament) => tournament.status === 'ongoing' && tournament.formatVersion !== 2,
+        (tournament) => tournament.status === 'ongoing' &&
+          (tournament.formatVersion === undefined || tournament.formatVersion === 1 || tournament.format === 'legacy_league'),
       );
       const progressResults = await Promise.all(
         legacyOngoing.map(async (tournament): Promise<[
@@ -310,13 +339,16 @@ export default function TournamentsManagementPage() {
         season: newTournament.season.trim(),
         startDate: newTournament.startDate,
         ...(newTournament.endDate ? { endDate: newTournament.endDate } : {}),
-        formatVersion: 2,
-        format: 'two_group_knockout',
+        formatVersion: newTournament.division === 'women' ? 3 : 2,
+        format: newTournament.division === 'women' ? 'single_table_final' : 'two_group_knockout',
+        division: newTournament.division,
       });
       if (response.success) {
-        toast.success('14-team competition created successfully');
+        toast.success(newTournament.division === 'women'
+          ? 'Three-team women’s competition created successfully'
+          : '14-team men’s competition created successfully');
         setIsCreating(false);
-        setNewTournament({ name: '', season: '', startDate: '', endDate: '' });
+        setNewTournament(EMPTY_TOURNAMENT_DRAFT);
         await fetchTournaments();
       }
     } catch (error: unknown) {
@@ -339,7 +371,15 @@ export default function TournamentsManagementPage() {
   };
 
   const groupCompetitions = tournaments.filter(t => t.formatVersion === 2 && t.format === 'two_group_knockout');
-  const legacyTournaments = tournaments.filter(t => t.formatVersion !== 2);
+  const womensCompetitions = tournaments.filter(t => t.formatVersion === 3 && t.format === 'single_table_final');
+  const selectedWomensCompetition = womensCompetitions.find((tournament) => tournament._id === selectedWomensTournamentId)
+    ?? womensCompetitions.find((tournament) => tournament.status === 'ongoing')
+    ?? womensCompetitions.find((tournament) => tournament.status === 'upcoming')
+    ?? womensCompetitions[0];
+  const legacyTournaments = tournaments.filter(t => !(
+    (t.formatVersion === 2 && t.format === 'two_group_knockout') ||
+    (t.formatVersion === 3 && t.format === 'single_table_final')
+  ));
   const ongoing = legacyTournaments.filter(t => t.status === 'ongoing');
   const upcoming = legacyTournaments.filter(t => t.status === 'upcoming');
   const completed = legacyTournaments.filter(t => t.status === 'completed');
@@ -359,7 +399,7 @@ export default function TournamentsManagementPage() {
           title={isTournamentCatalogueCurrent ? undefined : 'Reload the tournament catalogue first'}
           className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 hover:scale-105 active:scale-95 shadow-xl shadow-blue-600/20 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
         >
-          <Plus className="h-4 w-4" /> Initialize 14-Team Season
+          <Plus className="h-4 w-4" /> Initialize Season
         </button>
       </div>
 
@@ -380,31 +420,54 @@ export default function TournamentsManagementPage() {
 
       {isCreating && isTournamentCatalogueCurrent && (
         <div className="rounded-[40px] border border-blue-500/20 bg-blue-500/5 p-8 backdrop-blur-3xl animate-reveal">
-          <h2 className="text-xl font-black italic tracking-tighter text-white uppercase mb-2">New 14-Team Season</h2>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">Creates the approved fixed-format workspace. You will enter 14 teams and place seven manually into each group.</p>
+          <h2 className="text-xl font-black italic tracking-tighter text-white uppercase mb-2">
+            New {newTournament.division === 'women' ? 'Women’s Three-Team' : 'Men’s 14-Team'} Season
+          </h2>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+            {newTournament.division === 'women'
+              ? 'Creates a separate women’s workspace: three registered women’s teams, three physical league fixtures, then a top-two final.'
+              : 'Creates the approved men’s workspace. You will enter 14 men’s teams and place seven manually into each group.'}
+          </p>
           <div className="my-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Confirmed competition format">
-            {NEW_TOURNAMENT_RULES.map((rule) => (
+            {NEW_TOURNAMENT_RULES[newTournament.division].map((rule) => (
               <div key={rule} className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3 text-[9px] font-bold uppercase tracking-wider text-neutral-400">
                 {rule}
               </div>
             ))}
           </div>
-          <form onSubmit={handleCreate} aria-busy={isSubmittingTournament} className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
+          <form onSubmit={handleCreate} aria-busy={isSubmittingTournament} className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
+            <div className="space-y-2">
+              <label htmlFor="new-tournament-division" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Competition Format</label>
+              <Select
+                id="new-tournament-division"
+                controlSize="large"
+                surface="neutral"
+                disabled={isSubmittingTournament}
+                value={newTournament.division}
+                onChange={(event) => setNewTournament({
+                  ...newTournament,
+                  division: event.target.value as NewTournamentDraft['division'],
+                })}
+              >
+                <option value="men">Men — 14 teams / two groups</option>
+                <option value="women">Women — 3 teams / top-two final</option>
+              </Select>
+            </div>
             <div className="space-y-2">
               <label htmlFor="new-tournament-name" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Tournament Name</label>
-              <input id="new-tournament-name" type="text" required minLength={3} maxLength={120} disabled={isSubmittingTournament} value={newTournament.name} onChange={(e) => setNewTournament({ ...newTournament, name: e.target.value })} placeholder="e.g. SolidFM 5-Aside" className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-sm font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+              <input id="new-tournament-name" type="text" required minLength={3} maxLength={120} disabled={isSubmittingTournament} value={newTournament.name} onChange={(e) => setNewTournament({ ...newTournament, name: e.target.value })} placeholder="e.g. SolidFM 5-Aside" className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-base font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 [@media(pointer:fine)]:text-sm" />
             </div>
             <div className="space-y-2">
               <label htmlFor="new-tournament-season" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Season</label>
-              <input id="new-tournament-season" type="text" required maxLength={40} disabled={isSubmittingTournament} value={newTournament.season} onChange={(e) => setNewTournament({ ...newTournament, season: e.target.value })} placeholder="e.g. 2026" className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-sm font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+              <input id="new-tournament-season" type="text" required maxLength={40} disabled={isSubmittingTournament} value={newTournament.season} onChange={(e) => setNewTournament({ ...newTournament, season: e.target.value })} placeholder="e.g. 2026" className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-base font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 [@media(pointer:fine)]:text-sm" />
             </div>
             <div className="space-y-2">
               <label htmlFor="new-tournament-start-date" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Start Date</label>
-              <input id="new-tournament-start-date" type="date" required disabled={isSubmittingTournament} value={newTournament.startDate} onChange={(e) => setNewTournament({ ...newTournament, startDate: e.target.value })} className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-sm font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 [color-scheme:dark]" />
+              <input id="new-tournament-start-date" type="date" required disabled={isSubmittingTournament} value={newTournament.startDate} onChange={(e) => setNewTournament({ ...newTournament, startDate: e.target.value })} className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-base font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 [color-scheme:dark] [@media(pointer:fine)]:text-sm" />
             </div>
             <div className="space-y-2">
               <label htmlFor="new-tournament-end-date" className="text-[10px] font-black uppercase tracking-widest text-neutral-400">End Date <span className="normal-case tracking-normal">(optional)</span></label>
-              <input id="new-tournament-end-date" type="date" min={newTournament.startDate || undefined} disabled={isSubmittingTournament} value={newTournament.endDate} onChange={(e) => setNewTournament({ ...newTournament, endDate: e.target.value })} className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-sm font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 [color-scheme:dark]" />
+              <input id="new-tournament-end-date" type="date" min={newTournament.startDate || undefined} disabled={isSubmittingTournament} value={newTournament.endDate} onChange={(e) => setNewTournament({ ...newTournament, endDate: e.target.value })} className="w-full rounded-2xl border border-white/10 bg-black/50 px-6 py-4 text-base font-bold text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 [color-scheme:dark] [@media(pointer:fine)]:text-sm" />
             </div>
             <div className="flex gap-3">
               <button type="button" disabled={isSubmittingTournament} onClick={() => setIsCreating(false)} className="h-[54px] flex-1 rounded-2xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
@@ -421,6 +484,27 @@ export default function TournamentsManagementPage() {
           {groupCompetitions.map((tournament) => (
             <V2CompetitionPanel key={tournament._id} tournamentId={tournament._id} canManageCompetition={canManageTournaments} />
           ))}
+        </section>
+      )}
+
+      {womensCompetitions.length > 0 && (
+        <section className="space-y-6" aria-labelledby="womens-competitions-title">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <SectionHeader icon={<Trophy className="h-4 w-4 text-blue-400" />} label="Women’s Competitions" count={womensCompetitions.length} color="bg-blue-500/10" />
+              <h2 id="womens-competitions-title" className="sr-only">Three-team women’s single-table competitions</h2>
+              <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-600">One workspace is loaded at a time so current and archived seasons stay fast.</p>
+            </div>
+            {womensCompetitions.length > 1 ? (
+              <div className="w-full space-y-2 sm:w-80">
+                <label htmlFor="women-workspace-season" className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Women’s season workspace</label>
+                <Select id="women-workspace-season" surface="neutral" value={selectedWomensCompetition?._id ?? ''} onChange={(event) => setSelectedWomensTournamentId(event.target.value)}>
+                  {womensCompetitions.map((tournament) => <option key={tournament._id} value={tournament._id}>{tournament.name} — {tournament.season} ({tournament.status})</option>)}
+                </Select>
+              </div>
+            ) : null}
+          </div>
+          {selectedWomensCompetition ? <WomensCompetitionPanel key={selectedWomensCompetition._id} tournamentId={selectedWomensCompetition._id} canManageCompetition={canManageTournaments} /> : null}
         </section>
       )}
 

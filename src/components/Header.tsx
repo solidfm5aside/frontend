@@ -183,7 +183,7 @@ export default function Header() {
             onClick={closeMenu}
             className="hidden rounded-2xl bg-[#FFD700] px-5 py-3 text-[10px] font-black uppercase tracking-widest text-black shadow-xl shadow-yellow-600/20 transition-all hover:scale-105 hover:bg-white active:scale-95 motion-reduce:transform-none sm:inline-flex 2xl:px-7 2xl:text-[11px]"
           >
-            Register Now
+            Men&apos;s Registration
           </Link>
 
           <button
@@ -234,7 +234,7 @@ export default function Header() {
                 );
               })}
               <li className="border-t border-white/10 pt-8 sm:pt-10">
-                <Link href="/register-team" onClick={closeMenu} className="flex min-h-11 items-center text-blue-500">Register Your Team</Link>
+                <Link href="/register-team" onClick={closeMenu} className="flex min-h-11 items-center text-blue-500">Register Men&apos;s Team</Link>
               </li>
             </ul>
           </nav>
