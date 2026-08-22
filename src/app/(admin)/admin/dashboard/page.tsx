@@ -2,17 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import apiClient from '@/lib/api-client';
-import { toast } from 'sonner';
 import { useAuthStore } from '@/store/use-auth-store';
-import { CalendarDays, AlertCircle, LockKeyhole } from 'lucide-react';
+import { CalendarDays, LockKeyhole } from 'lucide-react';
 import Link from 'next/link';
 import { PageSpinner } from '@/components/ui/Spinner';
-import { FixtureConfigModal } from '@/components/admin/FixtureConfigModal';
 import type { ApiResponse } from '@/types';
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 interface Stats {
   totalTeams: number;
@@ -34,20 +28,10 @@ interface UpcomingTournament {
   format?: 'legacy_league' | 'two_group_knockout';
 }
 
-interface Readiness {
-  isReady: boolean;
-  totalTeams: number;
-  allTeamsReady: boolean;
-}
-
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [upcomingTournament, setUpcomingTournament] = useState<UpcomingTournament | null>(null);
-  const [readiness, setReadiness] = useState<Readiness | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [venueCount, setVenueCount] = useState(0);
   const { admin } = useAuthStore();
   const canManageTournaments = admin?.role === 'admin' || admin?.role === 'super_admin';
 
@@ -63,13 +47,6 @@ export default function DashboardPage() {
       }
     };
 
-    const fetchVenues = async () => {
-      try {
-        const res = await apiClient.get<ApiResponse<unknown[]>, ApiResponse<unknown[]>>('/venues');
-        if (res.success) setVenueCount(res.data.length);
-      } catch {}
-    };
-
     const fetchUpcomingTournament = async () => {
       try {
         const res = await apiClient.get<ApiResponse<UpcomingTournament[]>, ApiResponse<UpcomingTournament[]>>('/tournaments');
@@ -78,14 +55,6 @@ export default function DashboardPage() {
             res.data.find((tournament) => tournament.status === 'upcoming');
           if (pending) {
             setUpcomingTournament(pending);
-            if (pending.status === 'upcoming' && pending.formatVersion !== 2) {
-              try {
-                const rRes = await apiClient.get<ApiResponse<Readiness>, ApiResponse<Readiness>>(`/tournaments/${pending._id}/readiness`);
-                if (rRes.success) setReadiness(rRes.data);
-              } catch {}
-            } else if (pending.formatVersion !== 2) {
-              setReadiness({ isReady: true, totalTeams: 28, allTeamsReady: true });
-            }
           }
         }
       } catch (e) {
@@ -94,37 +63,8 @@ export default function DashboardPage() {
     };
 
     fetchStats();
-    fetchVenues();
     fetchUpcomingTournament();
   }, []);
-
-  const handleGenerateFixtures = () => {
-    if (!upcomingTournament || upcomingTournament.formatVersion === 2) return;
-    setIsModalOpen(true);
-  };
-
-  const onConfirmGenerate = async (numRounds: number, matchesPerDay: number) => {
-    if (!upcomingTournament) return;
-    
-    setIsGenerating(true);
-    setIsModalOpen(false);
-    try {
-      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(`/tournaments/${upcomingTournament._id}/generate-fixtures`, {
-        numRounds,
-        matchesPerDay
-      });
-      if (response.success) {
-        toast.success(`Fixtures successfully generated (${numRounds} rounds, ${matchesPerDay} matches/day)!`);
-        setUpcomingTournament(prev => prev ? { ...prev, fixturesGenerated: true, currentStage: 'league' } : null);
-        const statsRes = await apiClient.get<ApiResponse<Stats>, ApiResponse<Stats>>('/dashboard/stats');
-        if (statsRes.success) setStats(statsRes.data);
-      }
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to generate fixtures'));
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   if (isLoading) return <PageSpinner />;
 
@@ -199,60 +139,30 @@ export default function DashboardPage() {
             )}
 
             {upcomingTournament ? (
-              <div className={`flex flex-col gap-3 p-6 rounded-2xl border transition-all ${
-                upcomingTournament.fixturesGenerated
-                  ? 'bg-white/[0.02] border-white/5 opacity-60'
-                  : readiness?.isReady
-                  ? 'bg-blue-500/5 border-blue-500/20'
-                  : 'bg-white/[0.02] border-white/5'
-              }`}>
+              <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 transition-all">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    {upcomingTournament.fixturesGenerated
-                      ? <LockKeyhole className="h-5 w-5 text-neutral-500" />
-                      : <CalendarDays className={`h-5 w-5 ${readiness?.isReady ? 'text-blue-500' : 'text-neutral-500'}`} />
-                    }
+                    <CalendarDays className="h-5 w-5 text-blue-500" />
                     <div>
-                      <h4 className="text-sm font-bold text-white uppercase tracking-tighter">{isV2Competition ? 'Competition Workflow' : 'Initialize Fixtures'}</h4>
+                      <h4 className="text-sm font-bold text-white uppercase tracking-tighter">{isV2Competition ? 'Competition Workflow' : 'Official Fixture Record'}</h4>
                       <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-1 italic">
                         {isV2Competition
                           ? `${upcomingTournament.name} — 14-team group competition`
-                          : upcomingTournament.fixturesGenerated
-                          ? 'Fixtures already generated — locked'
-                          : `${upcomingTournament.name} — Season ${upcomingTournament.season}`
+                          : `${upcomingTournament.name} — enter the physically confirmed schedule`
                         }
                       </p>
                     </div>
                   </div>
-                  {isV2Competition ? (
+                  {canManageTournaments ? (
                     <Link href="/admin/tournaments" className="flex h-9 items-center rounded-xl bg-blue-600 px-5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-500">
-                      Open Workflow
+                      {isV2Competition ? 'Open Workflow' : 'Open Tournament'}
                     </Link>
-                  ) : upcomingTournament.fixturesGenerated ? (
-                    <span className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 text-neutral-600 border border-white/5 flex items-center gap-1.5">
-                      <LockKeyhole className="h-3 w-3" /> Generated
-                    </span>
-                  ) : !canManageTournaments ? (
-                    <span className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 text-neutral-600 border border-white/5 flex items-center gap-1.5 cursor-not-allowed" title="Administrator access is required to generate fixtures">
+                  ) : (
+                    <span className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 text-neutral-600 border border-white/5 flex items-center gap-1.5 cursor-not-allowed" title="Administrator access is required to manage the official fixture record">
                       <LockKeyhole className="h-3 w-3" /> Administrator Only
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!readiness?.isReady || isGenerating}
-                      onClick={handleGenerateFixtures}
-                      className="h-9 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600 shadow-lg shadow-blue-600/20"
-                    >
-                      {isGenerating ? 'Generating…' : 'Generate'}
-                    </button>
                   )}
                 </div>
-                {!isV2Competition && !upcomingTournament.fixturesGenerated && readiness && !readiness.isReady && (
-                  <div className="flex items-start gap-2 text-[10px] font-bold text-orange-400 uppercase tracking-wide">
-                    <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                    <span>Needs {28 - readiness.totalTeams} more team{readiness.totalTeams !== 27 ? 's' : ''} • All teams need 5+ players</span>
-                  </div>
-                )}
               </div>
             ) : (
               <Link href="/admin/tournaments" className="flex items-center justify-between p-6 rounded-2xl bg-blue-600/5 border border-blue-500/20 hover:bg-blue-600/10 transition-all group">
@@ -303,14 +213,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <FixtureConfigModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onConfirm={onConfirmGenerate}
-        venueCount={venueCount}
-        startDate={upcomingTournament?.startDate}
-        isGenerating={isGenerating}
-      />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, MapPin, Clock, Trophy } from 'l
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { Select } from '@/components/ui/Select';
 import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner';
-import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
+import { formatMatchDayKey, formatTime, getDayKey, TBC_DAY_KEY } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { Match, ApiResponse } from '@/types';
@@ -89,7 +89,11 @@ export default function ResultsClient() {
       if (!response.success) throw new Error(response.message || 'Results could not be loaded');
       if (requestId === requestSequence.current) {
         const completed = [...response.data]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          .sort((a, b) => {
+            if (!a.date) return b.date ? 1 : 0;
+            if (!b.date) return -1;
+            return new Date(b.date).getTime() - new Date(a.date).getTime();
+          });
         setMatches(completed);
         setLoadError(null);
       }
@@ -135,7 +139,11 @@ export default function ResultsClient() {
   }, [matches]);
 
   // RESULTS: Newest days first (Descending)
-  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((a, b) => b.localeCompare(a)), [matchesByDay]);
+  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((a, b) => {
+    if (a === TBC_DAY_KEY) return 1;
+    if (b === TBC_DAY_KEY) return -1;
+    return b.localeCompare(a);
+  }), [matchesByDay]);
 
   // Keep the newest valid matchday selected as tournaments change.
   useEffect(() => {
@@ -240,7 +248,7 @@ export default function ResultsClient() {
 
                 <div className="text-center min-w-0 px-2 md:px-4">
                   <h3 className="text-sm md:text-3xl font-black italic text-white uppercase tracking-tighter truncate leading-none">
-                    {selectedDate ? formatMatchDay(selectedDate + 'T00:00:00') : '—'}
+                    {selectedDate ? formatMatchDayKey(selectedDate) : '—'}
                   </h3>
                   <p className="text-[8px] md:text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mt-2 md:mt-3">
                     Results • Record {currentIndex + 1} of {totalDays} • {currentDayMatches.length} Matches
@@ -351,7 +359,7 @@ export default function ResultsClient() {
                       <div className="mt-5 md:mt-16 pt-4 md:pt-10 border-t border-white/5 flex flex-row justify-center gap-4 md:gap-12 items-center">
                         <div className="flex items-center gap-1.5 md:gap-2">
                           <MapPin className="h-2.5 w-2.5 md:h-4 md:w-4 text-blue-500" />
-                          <span className="text-[7px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-500">{match.venue || 'Solid FM Arena'}</span>
+                          <span className="text-[7px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-500">{match.venue || 'Venue TBC'}</span>
                         </div>
                         <div className="h-1 w-1 rounded-full bg-white/10"></div>
                         <div className="flex items-center gap-1.5 md:gap-2">

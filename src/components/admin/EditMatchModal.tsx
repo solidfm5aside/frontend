@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Select } from '@/components/ui/Select';
 import apiClient from '@/lib/api-client';
 import type { ApiResponse } from '@/types';
+import { lagosDateTimeInputToIso, toLagosDateTimeInput } from '@/utils/format';
 
 interface Venue {
   name: string;
@@ -14,18 +15,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function toLocalDateTimeInput(value: string) {
-  if (!value) return '';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  const localTime = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
-  return localTime.toISOString().slice(0, 16);
-}
-
 interface EditMatchModalProps {
   matchId: string;
-  initialDate: string;
-  initialVenue: string;
+  initialDate: string | null;
+  initialVenue: string | null;
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -40,8 +33,9 @@ const FOCUSABLE_ELEMENTS = [
 ].join(',');
 
 export default function EditMatchModal({ matchId, initialDate, initialVenue, onClose, onUpdate }: EditMatchModalProps) {
-  const [date, setDate] = useState(() => toLocalDateTimeInput(initialDate));
+  const [date, setDate] = useState(() => toLagosDateTimeInput(initialDate));
   const [venue, setVenue] = useState(initialVenue || '');
+  const [isSchedulePending, setIsSchedulePending] = useState(() => !initialDate && !initialVenue);
   const [isSaving, setIsSaving] = useState(false);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loadingVenues, setLoadingVenues] = useState(true);
@@ -125,7 +119,6 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
       if (requestId !== venueRequestIdRef.current) return;
 
       setVenues(response.data);
-      setVenue((currentVenue) => currentVenue || response.data[0]?.name || '');
       setVenueLoadError(response.data.length === 0 ? 'No active venues are currently registered' : null);
     } catch (error: unknown) {
       if (requestId !== venueRequestIdRef.current) return;
@@ -149,10 +142,13 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
     isSavingRef.current = true;
     setIsSaving(true);
     try {
-      const response = await apiClient.patch<ApiResponse<unknown>, ApiResponse<unknown>>(`/matches/${matchId}/details`, {
-        date: new Date(date).toISOString(),
-        venue
-      });
+      if (!isSchedulePending && (!date || !venue)) {
+        toast.error('Enter both the physically confirmed kickoff and venue, or leave both TBC');
+        return;
+      }
+      const response = await apiClient.patch<ApiResponse<unknown>, ApiResponse<unknown>>(`/matches/${matchId}/details`, isSchedulePending
+        ? { date: null, venue: null }
+        : { date: lagosDateTimeInputToIso(date), venue });
       if (response.success) {
         toast.success('Match details updated successfully');
         onUpdate();
@@ -188,8 +184,8 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
       >
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h2 id="edit-match-title" className="text-2xl font-black italic tracking-tighter text-white uppercase">Reschedule</h2>
-            <p id="edit-match-description" className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Update time and venue</p>
+            <h2 id="edit-match-title" className="text-2xl font-black italic tracking-tighter text-white uppercase">Official Schedule</h2>
+            <p id="edit-match-description" className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Record the physically confirmed kickoff and venue</p>
           </div>
           <button
             ref={closeButtonRef}
@@ -205,15 +201,31 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
 
         <form onSubmit={handleSubmit}>
           <fieldset disabled={isSaving} className="space-y-6 disabled:opacity-70">
+          <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-xs font-bold text-yellow-100">
+            <input
+              type="checkbox"
+              checked={isSchedulePending}
+              onChange={(event) => {
+                setIsSchedulePending(event.target.checked);
+                if (event.target.checked) {
+                  setDate('');
+                  setVenue('');
+                }
+              }}
+              className="h-4 w-4 accent-yellow-400"
+            />
+            Keep kickoff and venue marked Schedule TBC
+          </label>
           <div className="space-y-2">
-            <label htmlFor="edit-match-date" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 block">Date & Time</label>
+            <label htmlFor="edit-match-date" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 block">Date & Time • Africa/Lagos</label>
             <input
               id="edit-match-date"
               type="datetime-local"
-              required
+              required={!isSchedulePending}
+              disabled={isSchedulePending}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-black border border-white/10 rounded-xl px-4 py-4 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all font-mono text-sm"
+              className="w-full rounded-xl border border-white/10 bg-black px-4 py-4 font-mono text-base text-white transition-all focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [@media(pointer:fine)]:text-sm"
             />
           </div>
 
@@ -221,13 +233,13 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
             <label htmlFor="edit-match-venue" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 block">Venue</label>
             <Select
               id="edit-match-venue"
-              required
+              required={!isSchedulePending}
               controlSize="large"
               surface="black"
               fontWeight="medium"
               value={venue}
               onChange={(e) => setVenue(e.target.value)}
-              disabled={loadingVenues || (!venue && venues.length === 0)}
+              disabled={isSchedulePending || loadingVenues || venues.length === 0}
               aria-describedby={venueLoadError ? 'edit-match-venue-error' : loadingVenues ? 'edit-match-venue-status' : undefined}
               aria-invalid={venueLoadError && !venue ? true : undefined}
             >
@@ -249,7 +261,7 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
                 <p>
                   {venueLoadError}. {venue
                     ? 'The current venue is preserved; retry to choose another venue.'
-                    : 'Retry before saving because this match has no usable venue.'}
+                    : isSchedulePending ? 'The match remains honestly marked TBC.' : 'Retry before saving because this match has no usable venue.'}
                 </p>
                 <button
                   type="button"
@@ -274,7 +286,7 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
             </button>
             <button
               type="submit"
-              disabled={isSaving || !venue}
+              disabled={isSaving || (!isSchedulePending && (!date || !venue))}
               className="flex-1 rounded-xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white hover:bg-blue-500 transition-all shadow-xl shadow-blue-600/20 disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save Changes'}

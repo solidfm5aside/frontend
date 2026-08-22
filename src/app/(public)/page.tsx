@@ -270,7 +270,7 @@ export default function Home() {
               Group Stage. Knockout Road. <br /><span className="text-neutral-800">Maximum Intensity.</span>
             </h3>
             <p className="max-w-3xl border-l-4 border-blue-600 pl-5 text-base font-medium leading-relaxed text-neutral-500 sm:pl-8 sm:text-lg md:text-2xl">
-              Fourteen teams are manually split into two groups of seven. Every team plays six group matches, then the top four in each group advance into a fixed quarter-final path.
+              Fourteen teams are manually split into two groups of seven. Every team plays six group matches, then the top four in each group advance to quarter-finals confirmed through the official physical process.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -278,7 +278,7 @@ export default function Home() {
               { id: "01", t: "Two Groups", s: "Seven Teams in Each Group.", d: "The administrator manually places the 14 registered teams into Group A and Group B, with exactly seven teams in each." },
               { id: "02", t: "Single Round", s: "Six Group Matches Each.", d: "Every team meets each group opponent once. Each group therefore plays 21 matches, for 42 group fixtures in total." },
               { id: "03", t: "Top Four Advance", s: "Eight Quarter-Finalists.", d: "Teams rank by points, goal difference, goals scored, head-to-head, then an explicit committee decision if a tie still remains." },
-              { id: "04", t: "Fixed Quarter-Finals", s: "The Route Is Known.", d: "A1 plays B4, A2 plays B3, B1 plays A4, and B2 plays A3. There is no random knockout draw." },
+              { id: "04", t: "Official Quarter-Finals", s: "Physical Pairings, Clear Record.", d: "The competition committee completes the quarter-final pairing process physically. The administrator records the agreed teams and schedule without the app choosing either." },
               { id: "05", t: "Road to Glory", s: "Quarter-Finals. Semis. Final.", d: "The four quarter-final winners reach the semi-finals, then the final decides the champion. No third-place match is played." },
             ].map((item, idx) => (
               <div key={item.id} className={`group rounded-[32px] border border-white/5 bg-white/[0.01] p-8 transition-all hover:border-blue-500/40 hover:bg-white/[0.03] sm:p-10 md:rounded-[40px] md:p-12 reveal-on-scroll stagger-${idx+1}`}>

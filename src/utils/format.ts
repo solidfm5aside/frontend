@@ -3,9 +3,57 @@
  * Import from here instead of defining locally in each page.
  */
 
-export function formatMatchDay(dateStr: string): string {
+export const TBC_DAY_KEY = 'schedule-tbc';
+export const LAGOS_TIME_ZONE = 'Africa/Lagos';
+
+function dateParts(date: Date, includeTime = false) {
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: LAGOS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    ...(includeTime ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' as const } : {}),
+  });
+  return Object.fromEntries(
+    formatter.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+}
+
+export function toLagosDateTimeInput(value: string | null | undefined): string {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const parts = dateParts(parsed, true);
+  const hour = parts.hour === '24' ? '00' : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}`;
+}
+
+export function lagosDateTimeInputToIso(value: string): string {
+  const components = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!components) throw new Error('Enter a valid Africa/Lagos kickoff time');
+  const [, rawYear, rawMonth, rawDay, rawHour, rawMinute] = components;
+  const year = Number(rawYear);
+  const month = Number(rawMonth);
+  const day = Number(rawDay);
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+  const daysInMonth = month >= 1 && month <= 12
+    ? new Date(Date.UTC(year, month, 0)).getUTCDate()
+    : 0;
+  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1 || day > daysInMonth || hour > 23 || minute > 59) {
+    throw new Error('Enter a valid Africa/Lagos kickoff time');
+  }
+  const parsed = new Date(`${value}:00+01:00`);
+  if (Number.isNaN(parsed.getTime())) throw new Error('Enter a valid Africa/Lagos kickoff time');
+  return parsed.toISOString();
+}
+
+export function formatMatchDay(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Schedule TBC';
   const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return 'Schedule TBC';
   return d.toLocaleDateString('en-GB', {
+    timeZone: LAGOS_TIME_ZONE,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -13,60 +61,27 @@ export function formatMatchDay(dateStr: string): string {
   });
 }
 
-export function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString('en-GB', {
+export function formatTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Time TBC';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'Time TBC';
+  const time = date.toLocaleTimeString('en-GB', {
+    timeZone: LAGOS_TIME_ZONE,
     hour: '2-digit',
     minute: '2-digit',
   });
+  return `${time} WAT`;
 }
 
-export function getDayKey(dateStr: string): string {
-  return new Date(dateStr).toISOString().split('T')[0]; // YYYY-MM-DD
+export function getDayKey(dateStr: string | null | undefined): string {
+  if (!dateStr) return TBC_DAY_KEY;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return TBC_DAY_KEY;
+  const parts = dateParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-/**
- * Estimates the fixture end date given scheduling parameters.
- * Matches are only played on Saturdays and Sundays.
- */
-export function calculateFixtureEndDate(
-  startDate: string,
-  numRounds: number,
-  matchesPerDay: number
-): Date | null {
-  if (!startDate) return null;
-  const totalMatches = numRounds * 14;
-  const totalDaysNeeded = Math.ceil(totalMatches / matchesPerDay);
-
-  const currentDate = new Date(startDate);
-  // Fast-forward to the first Saturday
-  const day = currentDate.getUTCDay();
-  const diff = (6 - day + 7) % 7;
-  currentDate.setUTCDate(currentDate.getUTCDate() + diff);
-
-  let daysCount = 1;
-  let isSat = true;
-
-  while (daysCount < totalDaysNeeded) {
-    if (isSat) {
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1); // Sat -> Sun
-      isSat = false;
-    } else {
-      currentDate.setUTCDate(currentDate.getUTCDate() + 6); // Sun -> next Sat
-      isSat = true;
-    }
-    daysCount++;
-  }
-
-  return currentDate;
-}
-
-/**
- * Returns the first Saturday on or after startDate.
- */
-export function getFirstMatchDay(startDate: string): Date | null {
-  if (!startDate) return null;
-  const d = new Date(startDate);
-  const diff = (6 - d.getUTCDay() + 7) % 7;
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d;
+export function formatMatchDayKey(dayKey: string | null | undefined): string {
+  if (!dayKey || dayKey === TBC_DAY_KEY) return 'Schedule TBC';
+  return formatMatchDay(`${dayKey}T00:00:00+01:00`);
 }

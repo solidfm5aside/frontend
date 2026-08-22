@@ -7,7 +7,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, MapPin, Clock, Zap } from 'luci
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { Select } from '@/components/ui/Select';
 import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner';
-import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
+import { formatMatchDayKey, formatTime, getDayKey, TBC_DAY_KEY } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { Match, ApiResponse } from '@/types';
@@ -151,7 +151,11 @@ export default function FixturesClient() {
 
   const matchesByDay = useMemo(() => {
     const map: Record<string, Match[]> = {};
-    [...filteredMatches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(m => {
+    [...filteredMatches].sort((a, b) => {
+      if (!a.date) return b.date ? -1 : 0;
+      if (!b.date) return 1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    }).forEach(m => {
       const key = getDayKey(m.date);
       if (!map[key]) map[key] = [];
       map[key].push(m);
@@ -159,7 +163,11 @@ export default function FixturesClient() {
     return map;
   }, [filteredMatches]);
 
-  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort(), [matchesByDay]);
+  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((left, right) => {
+    if (left === TBC_DAY_KEY) return -1;
+    if (right === TBC_DAY_KEY) return 1;
+    return left.localeCompare(right);
+  }), [matchesByDay]);
 
   // Keep the selected matchday valid as filters and tournaments change.
   useEffect(() => {
@@ -169,8 +177,10 @@ export default function FixturesClient() {
     }
 
     if (!selectedDate || !sortedDays.includes(selectedDate)) {
-      const today = new Date().toISOString().split('T')[0];
-      const targetDate = sortedDays.find(d => d >= today) || sortedDays[sortedDays.length - 1];
+      const today = getDayKey(new Date().toISOString());
+      const targetDate = sortedDays.includes(TBC_DAY_KEY)
+        ? TBC_DAY_KEY
+        : sortedDays.find(d => d >= today) || sortedDays[sortedDays.length - 1];
       setSelectedDate(targetDate);
     }
   }, [sortedDays, selectedDate]);
@@ -283,10 +293,10 @@ export default function FixturesClient() {
 
                 <div className="text-center min-w-0 px-4">
                   <h3 className="text-xl md:text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
-                    {selectedDate ? formatMatchDay(selectedDate + 'T00:00:00') : '—'}
+                    {selectedDate ? formatMatchDayKey(selectedDate) : '—'}
                   </h3>
                   <p className="text-[8px] md:text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mt-3">
-                    {activeStage.replace(/_/g, ' ')} • Matchday {currentIndex + 1} of {totalDays} • {currentDayMatches?.length || 0} Fixtures
+                    {activeStage.replace(/_/g, ' ')} • {selectedDate === TBC_DAY_KEY ? 'Awaiting official schedule' : `Matchday ${currentIndex + 1} of ${totalDays}`} • {currentDayMatches?.length || 0} Fixtures
                   </p>
                 </div>
 
@@ -316,7 +326,7 @@ export default function FixturesClient() {
                         'bg-blue-500/10 text-blue-500 border border-blue-500/20'
                       }`}>
                         {!isGroupStage && <Zap className="h-3 w-3" />}
-                        {match.stage?.replace(/_/g, ' ')}{match.groupKey ? ` • Group ${match.groupKey}` : ''} • {match.status}
+                        {match.stage?.replace(/_/g, ' ')}{match.groupKey ? ` • Group ${match.groupKey}${match.groupKey === 'A' ? ' / Pot 1' : ' / Pot 2'}` : ''} • {match.date && match.venue ? match.status : 'schedule TBC'}
                       </span>
                     </div>
 
@@ -367,12 +377,12 @@ export default function FixturesClient() {
                     <div className="mt-8 md:mt-16 pt-6 md:pt-10 border-t border-white/5 flex flex-row justify-center gap-4 md:gap-12 items-center">
                        <div className="flex items-center gap-2">
                           <MapPin className="h-3 w-3 md:h-4 md:w-4 text-blue-500" />
-                          <span className="text-[8px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-400">{match.venue || 'TBD Stadium'}</span>
+                          <span className="text-[8px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-400">{match.venue || 'Venue TBC'}</span>
                        </div>
                        <div className="h-1 w-1 rounded-full bg-white/10 hidden sm:block"></div>
                        <div className="hidden sm:flex items-center gap-2">
-                          <span className="text-[8px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-600">Match Ref:</span>
-                          <span className="text-[8px] md:text-xs font-bold text-neutral-400">Official Official</span>
+                          <span className="text-[8px] md:text-xs font-black uppercase tracking-[0.2em] text-neutral-600">Official record:</span>
+                          <span className="text-[8px] md:text-xs font-bold text-neutral-400">{match.officialFixtureNumber ? `Fixture ${match.officialFixtureNumber}` : 'Published fixture'}</span>
                        </div>
                     </div>
                   </div>

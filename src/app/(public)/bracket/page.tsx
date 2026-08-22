@@ -160,7 +160,7 @@ export default function BracketPage() {
             <p className="text-[10px] font-bold uppercase leading-relaxed tracking-wider text-neutral-500">
               {selectedTournament && !isFixedCompetition
                 ? 'This legacy edition follows its originally published knockout stages and pairings.'
-                : 'The confirmed format has two seven-team groups. The top four in each group qualify for fixed quarter-finals A1–B4, A2–B3, B1–A4, and B2–A3, followed by the semi-finals and final. No third-place match is played.'}
+                : 'The confirmed format has two seven-team groups. The top four in each group qualify, then the quarter-final pairings agreed through the physical process are recorded here. The semi-finals and final follow the official bracket, with no third-place match.'}
             </p>
           </div>
           <div className="flex w-full flex-wrap items-center gap-5 sm:w-auto sm:flex-nowrap sm:gap-6">

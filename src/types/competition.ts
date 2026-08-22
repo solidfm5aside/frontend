@@ -5,7 +5,7 @@ export type CompetitionTieBreaker =
   | 'goals_for'
   | 'head_to_head'
   | 'committee_decision';
-export type CompetitionDrawMode = 'manual' | 'random' | 'seeded_cross_group';
+export type CompetitionDrawMode = 'manual';
 export type CompetitionCommitteeDecisionMethod = 'coin_toss' | 'draw' | 'other';
 
 export interface CompetitionTeamSummary {
@@ -101,8 +101,9 @@ export interface CompetitionBracketMatch {
   homeScore: number;
   awayScore: number;
   shootoutScore?: { home?: number; away?: number };
-  date: string;
-  venue: string;
+  date: string | null;
+  venue: string | null;
+  scheduleStatus?: 'confirmed' | 'pending';
 }
 
 export interface CompetitionBracketNode {
@@ -148,29 +149,44 @@ export interface CompetitionOverview {
 }
 
 export interface CompetitionFixture {
+  matchId?: string;
   fixtureKey: string;
+  officialNumber: number;
   groupKey: CompetitionGroupKey;
   leg: 1 | 2;
-  round: number;
-  roundSlot: number;
+  round?: number;
+  roundSlot?: number;
   homeEntryId: string;
   awayEntryId: string;
   homeTeamId: string;
   awayTeamId: string;
   homeTeamName: string;
   awayTeamName: string;
-  date: string;
-  venue: string;
+  kickoffAt: string | null;
+  venue: string | null;
+  scheduleStatus: 'confirmed' | 'pending';
 }
 
 export interface CompetitionFixturePlan {
   tournamentId: string;
   tournamentRevision: number;
-  matchesPerDay: number;
-  roundRobinLegs: 1 | 2;
   totalMatches: number;
+  confirmedCount: number;
+  pendingCount: number;
   fixtures: CompetitionFixture[];
   planHash: string;
+  status?: 'published' | 'not_published';
+  timeZone?: string;
+  sourceReference?: string;
+}
+
+export interface CompetitionOfficialFixtureInput {
+  officialNumber: number;
+  groupKey: CompetitionGroupKey;
+  homeEntryId: string;
+  awayEntryId: string;
+  kickoffAt: string | null;
+  venue: string | null;
 }
 
 export interface CompetitionDrawPairing {
@@ -179,6 +195,8 @@ export interface CompetitionDrawPairing {
   awayEntryId: string;
   homeTeamId: CompetitionTeamSummary | string;
   awayTeamId: CompetitionTeamSummary | string;
+  kickoffAt?: string | null;
+  venue?: string | null;
 }
 
 export interface CompetitionDraw {
@@ -188,7 +206,6 @@ export interface CompetitionDraw {
   status: 'draft' | 'published' | 'superseded';
   mode: CompetitionDrawMode;
   pairings: CompetitionDrawPairing[];
-  randomSeed?: string;
   createdAt?: string;
   publishedAt?: string;
 }

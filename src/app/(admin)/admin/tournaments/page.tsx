@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/use-auth-store';
 import { Plus, CheckCircle2, RefreshCw, CalendarDays, AlertCircle, Flame, Clock, Archive, LockKeyhole, Trophy } from 'lucide-react';
 import { PageSpinner } from '@/components/ui/Spinner';
-import { FixtureConfigModal } from '@/components/admin/FixtureConfigModal';
 import { V2CompetitionPanel } from '@/components/admin/V2CompetitionPanel';
 
 interface Tournament {
@@ -23,24 +23,15 @@ interface Tournament {
 
 interface TournamentCardProps {
   tournament: Tournament;
-  readiness?: LegacyReadiness;
   stageProgress?: { total: number; completed: number } | null;
-  isGenerating: boolean;
   canManageTournament: boolean;
   onStatusUpdate: (id: string, status: string) => void;
-  onGenerateFixtures: (id: string) => void;
-  onGenerateKnockout: (id: string, stage: string) => void;
 }
 
 interface ApiResponse<T> {
   success: boolean;
   data: T;
   message?: string;
-}
-
-interface LegacyReadiness {
-  isReady: boolean;
-  totalTeams: number;
 }
 
 interface MatchStatusSummary {
@@ -67,18 +58,10 @@ const STAGES = [
   { key: 'final', label: 'Final' },
 ];
 
-const NEXT_STAGE: Record<string, string> = {
-  league: 'playoff',
-  playoff: 'round_of_16',
-  round_of_16: 'quarter_finals',
-  quarter_finals: 'semi_finals',
-  semi_finals: 'final',
-};
-
 const NEW_TOURNAMENT_RULES = [
   'Single-leg group stage • 42 matches',
   'Top four per group qualify',
-  'Fixed A/B quarter-final pairings',
+  'Physical quarter-final pairings recorded by admin',
   'Maximum 10 players • No third place',
 ] as const;
 
@@ -94,16 +77,11 @@ function SectionHeader({ icon, label, count, color }: SectionHeaderProps) {
 
 function TournamentCard({
   tournament,
-  readiness,
   stageProgress,
-  isGenerating,
   canManageTournament,
   onStatusUpdate,
-  onGenerateFixtures,
-  onGenerateKnockout,
 }: TournamentCardProps) {
   const currentStageIdx = STAGES.findIndex(s => s.key === tournament.currentStage);
-  const nextStage = NEXT_STAGE[tournament.currentStage];
   const allCurrentStageDone = stageProgress ? stageProgress.completed === stageProgress.total && stageProgress.total > 0 : false;
 
   return (
@@ -171,48 +149,32 @@ function TournamentCard({
       <div className="relative z-10 flex flex-col border-t border-white/5 pt-6 gap-4">
         {tournament.status === 'upcoming' && (
           <div className="flex flex-col gap-3">
-            {readiness && !readiness.isReady && (
-              <div className="flex items-start gap-2 rounded-xl bg-orange-500/10 p-3 text-[10px] font-bold text-orange-400 border border-orange-500/20">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>Requires 28 teams ({readiness.totalTeams} registered) with 5+ players each before fixtures can be generated.</span>
-              </div>
-            )}
-            {readiness?.isReady && !tournament.fixturesGenerated && (
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
-                <CheckCircle2 className="h-4 w-4" /> All 28 teams are ready!
-              </div>
-            )}
+            <div className="flex items-start gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-[10px] font-bold text-blue-200">
+              <CalendarDays className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Fixture pairings and schedules must come from the official physical process. This legacy season will not create them automatically.</span>
+            </div>
             <div className="flex flex-wrap gap-2 sm:gap-3">
-              {tournament.fixturesGenerated ? (
-                <div className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-neutral-500 border border-white/5">
-                  <LockKeyhole className="h-3.5 w-3.5" /> Fixtures Generated
-                </div>
-              ) : !canManageTournament ? (
-                <div className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-neutral-600 border border-white/5 cursor-not-allowed" title="Administrator access is required to generate fixtures">
+              <Link href={`/admin/matches?tournament=${tournament._id}`} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600/10 py-3 text-[10px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white">
+                <CalendarDays className="h-4 w-4" /> Match Centre
+              </Link>
+              {canManageTournament ? (
+                <button
+                  type="button"
+                  onClick={() => onStatusUpdate(tournament._id, 'ongoing')}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white"
+                >
+                  <RefreshCw className="h-4 w-4" /> Start Season
+                </button>
+              ) : (
+                <div className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-neutral-600" title="Administrator access is required to update the season">
                   <LockKeyhole className="h-3.5 w-3.5" /> Administrator Only
                 </div>
-              ) : (
-                <button
-                  disabled={!readiness?.isReady || isGenerating}
-                  onClick={() => onGenerateFixtures(tournament._id)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600/10 py-3 text-[10px] font-black uppercase tracking-widest text-blue-500 transition-all hover:bg-blue-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600/10 disabled:hover:text-blue-500"
-                >
-                  <CalendarDays className="h-4 w-4" />
-                  {isGenerating ? 'Generating...' : '1. Generate Fixtures'}
-                </button>
               )}
-              <button 
-                onClick={() => onStatusUpdate(tournament._id, 'ongoing')}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white"
-              >
-                <RefreshCw className="h-4 w-4" /> 2. Start Season
-              </button>
             </div>
           </div>
         )}
 
-        {/* Knockout Stage Generator — visible for ongoing tournaments */}
-        {tournament.status === 'ongoing' && tournament.fixturesGenerated && nextStage && (
+        {tournament.status === 'ongoing' && tournament.fixturesGenerated && (
           <div className="flex flex-col gap-2">
             {!allCurrentStageDone && stageProgress && (
               <div className="flex items-center gap-2 rounded-xl bg-yellow-500/10 p-3 text-[10px] font-bold text-yellow-400 border border-yellow-500/20">
@@ -227,23 +189,12 @@ function TournamentCard({
             {allCurrentStageDone && (
               <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                <span>All <span className="uppercase">{tournament.currentStage.replace(/_/g, ' ')}</span> matches complete — ready to generate <span className="uppercase">{nextStage.replace(/_/g, ' ')}</span>!</span>
+                <span>All <span className="uppercase">{tournament.currentStage.replace(/_/g, ' ')}</span> matches are complete. Automatic legacy progression is disabled; use Match Centre to review the completed results.</span>
               </div>
             )}
-            {canManageTournament && (
-              <button
-                disabled={!allCurrentStageDone || isGenerating}
-                onClick={() => {
-                  if (confirm(`Generate ${nextStage.replace(/_/g, ' ')} fixtures?`)) {
-                    onGenerateKnockout(tournament._id, nextStage);
-                  }
-                }}
-                className="flex items-center justify-center gap-2 rounded-xl py-3 text-[10px] font-black uppercase tracking-widest transition-all border bg-blue-600/10 text-blue-400 border-blue-500/20 hover:bg-blue-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <Flame className="h-3.5 w-3.5" />
-                Generate {nextStage.replace(/_/g, ' ')}
-              </button>
-            )}
+            <Link href={`/admin/matches?tournament=${tournament._id}`} className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-600/10 py-3 text-[10px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white">
+              <CalendarDays className="h-3.5 w-3.5" /> Open Match Centre
+            </Link>
           </div>
         )}
 
@@ -271,19 +222,13 @@ function TournamentCard({
 
 export default function TournamentsManagementPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [readiness, setReadiness] = useState<Record<string, LegacyReadiness>>({});
   const [stageProgress, setStageProgress] = useState<Record<string, { total: number; completed: number }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [tournamentLoadError, setTournamentLoadError] = useState<string | null>(null);
   const [isTournamentCatalogueCurrent, setIsTournamentCatalogueCurrent] = useState(false);
-  const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isSubmittingTournament, setIsSubmittingTournament] = useState(false);
   const [newTournament, setNewTournament] = useState({ name: '', season: '', startDate: '', endDate: '' });
-  
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedTourneyId, setSelectedTourneyId] = useState<string | null>(null);
-  const [venueCount, setVenueCount] = useState(0);
   const tournamentRequestSequence = useRef(0);
 
   const { admin } = useAuthStore();
@@ -298,61 +243,35 @@ export default function TournamentsManagementPage() {
       const response = await apiClient.get<ApiResponse<Tournament[]>, ApiResponse<Tournament[]>>('/tournaments');
       if (!response.success) throw new Error(response.message || 'Tournament catalogue could not be loaded');
 
-      const legacyUpcoming = response.data.filter(
-        (tournament) => tournament.status === 'upcoming' && tournament.formatVersion !== 2,
-      );
       const legacyOngoing = response.data.filter(
         (tournament) => tournament.status === 'ongoing' && tournament.formatVersion !== 2,
       );
-      const [readinessResults, progressResults] = await Promise.all([
-          Promise.all(
-            legacyUpcoming.map(async (tournament): Promise<[string, LegacyReadiness] | null> => {
-              try {
-                const readinessResponse = await apiClient.get<
-                  ApiResponse<LegacyReadiness>,
-                  ApiResponse<LegacyReadiness>
-                >(`/tournaments/${tournament._id}/readiness`);
-                return readinessResponse.success
-                  ? [tournament._id, readinessResponse.data]
-                  : null;
-              } catch {
-                return null;
-              }
-            }),
-          ),
-          Promise.all(
-            legacyOngoing.map(async (tournament): Promise<[
-              string,
-              { total: number; completed: number },
-            ] | null> => {
-              try {
-                const matchesResponse = await apiClient.get<
-                  ApiResponse<MatchStatusSummary[]>,
-                  ApiResponse<MatchStatusSummary[]>
-                >(`/matches?tournamentId=${tournament._id}&stage=${tournament.currentStage}`);
-                if (!matchesResponse.success) return null;
-                return [
-                  tournament._id,
-                  {
-                    total: matchesResponse.data.length,
-                    completed: matchesResponse.data.filter((match) => match.status === 'completed').length,
-                  },
-                ];
-              } catch {
-                return null;
-              }
-            }),
-          ),
-      ]);
+      const progressResults = await Promise.all(
+        legacyOngoing.map(async (tournament): Promise<[
+          string,
+          { total: number; completed: number },
+        ] | null> => {
+          try {
+            const matchesResponse = await apiClient.get<
+              ApiResponse<MatchStatusSummary[]>,
+              ApiResponse<MatchStatusSummary[]>
+            >(`/matches?tournamentId=${tournament._id}&stage=${tournament.currentStage}`);
+            if (!matchesResponse.success) return null;
+            return [
+              tournament._id,
+              {
+                total: matchesResponse.data.length,
+                completed: matchesResponse.data.filter((match) => match.status === 'completed').length,
+              },
+            ];
+          } catch {
+            return null;
+          }
+        }),
+      );
 
       if (requestSequence !== tournamentRequestSequence.current) return;
       setTournaments(response.data);
-
-      const rData: Record<string, LegacyReadiness> = {};
-      for (const result of readinessResults) {
-        if (result) rData[result[0]] = result[1];
-      }
-      setReadiness(rData);
 
       const pData: Record<string, { total: number; completed: number }> = {};
       for (const result of progressResults) {
@@ -370,20 +289,12 @@ export default function TournamentsManagementPage() {
     }
   }, []);
 
-  const fetchVenues = useCallback(async () => {
-    try {
-      const res = await apiClient.get<ApiResponse<unknown[]>, ApiResponse<unknown[]>>('/venues');
-      if (res.success) setVenueCount(res.data.length);
-    } catch {}
-  }, []);
-
   useEffect(() => {
     void fetchTournaments();
-    void fetchVenues();
     return () => {
       tournamentRequestSequence.current += 1;
     };
-  }, [fetchTournaments, fetchVenues]);
+  }, [fetchTournaments]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -415,23 +326,6 @@ export default function TournamentsManagementPage() {
     }
   };
 
-  const handleGenerateKnockout = async (tournamentId: string, stage: string) => {
-    setIsGenerating(tournamentId);
-    try {
-      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(`/tournaments/${tournamentId}/generate-knockout`, {
-        stage
-      });
-      if (response.success) {
-        toast.success(`Knockout fixtures generated for ${stage.replace('_', ' ')}!`);
-        fetchTournaments(true);
-      }
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to generate knockout fixtures'));
-    } finally {
-      setIsGenerating(null);
-    }
-  };
-
   const handleStatusUpdate = async (id: string, status: string) => {
     try {
       const response = await apiClient.patch<ApiResponse<unknown>, ApiResponse<unknown>>(`/tournaments/${id}`, { status });
@@ -441,33 +335,6 @@ export default function TournamentsManagementPage() {
       }
     } catch {
       toast.error('Failed to update status');
-    }
-  };
-
-  const handleGenerateFixtures = (id: string) => {
-    setSelectedTourneyId(id);
-    setIsModalOpen(true);
-  };
-
-  const onConfirmGenerate = async (numRounds: number, matchesPerDay: number) => {
-    if (!selectedTourneyId) return;
-
-    setIsGenerating(selectedTourneyId);
-    setIsModalOpen(false);
-    try {
-      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(`/tournaments/${selectedTourneyId}/generate-fixtures`, {
-        numRounds,
-        matchesPerDay
-      });
-      if (response.success) {
-        toast.success(`Fixtures successfully generated (${numRounds} rounds, ${matchesPerDay} matches/day)!`);
-        fetchTournaments(true);
-      }
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to generate fixtures'));
-    } finally {
-      setIsGenerating(null);
-      setSelectedTourneyId(null);
     }
   };
 
@@ -563,7 +430,7 @@ export default function TournamentsManagementPage() {
           <SectionHeader icon={<Flame className="h-4 w-4 text-emerald-500" />} label="Active Season" count={ongoing.length} color="bg-emerald-500/10" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {ongoing.map(t => (
-              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} stageProgress={stageProgress[t._id]} isGenerating={isGenerating === t._id} canManageTournament={canManageTournaments} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
+              <TournamentCard key={t._id} tournament={t} stageProgress={stageProgress[t._id]} canManageTournament={canManageTournaments} onStatusUpdate={handleStatusUpdate} />
             ))}
           </div>
         </section>
@@ -575,7 +442,7 @@ export default function TournamentsManagementPage() {
           <SectionHeader icon={<Clock className="h-4 w-4 text-yellow-500" />} label="Upcoming / Pending" count={upcoming.length} color="bg-yellow-500/10" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {upcoming.map(t => (
-              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} stageProgress={stageProgress[t._id]} isGenerating={isGenerating === t._id} canManageTournament={canManageTournaments} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
+              <TournamentCard key={t._id} tournament={t} stageProgress={stageProgress[t._id]} canManageTournament={canManageTournaments} onStatusUpdate={handleStatusUpdate} />
             ))}
           </div>
         </section>
@@ -587,7 +454,7 @@ export default function TournamentsManagementPage() {
           <SectionHeader icon={<Archive className="h-4 w-4 text-blue-400" />} label="Past Editions" count={completed.length} color="bg-blue-500/10" />
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {completed.map(t => (
-              <TournamentCard key={t._id} tournament={t} readiness={readiness[t._id]} stageProgress={stageProgress[t._id]} isGenerating={isGenerating === t._id} canManageTournament={canManageTournaments} onStatusUpdate={handleStatusUpdate} onGenerateFixtures={handleGenerateFixtures} onGenerateKnockout={handleGenerateKnockout} />
+              <TournamentCard key={t._id} tournament={t} stageProgress={stageProgress[t._id]} canManageTournament={canManageTournaments} onStatusUpdate={handleStatusUpdate} />
             ))}
           </div>
         </section>
@@ -598,18 +465,6 @@ export default function TournamentsManagementPage() {
           <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] italic">No tournaments found. Initialize the first season!</p>
         </div>
       )}
-
-      <FixtureConfigModal 
-        isOpen={isModalOpen} 
-        onClose={() => {
-          setIsModalOpen(false);
-          setSelectedTourneyId(null);
-        }} 
-        onConfirm={onConfirmGenerate}
-        venueCount={venueCount}
-        startDate={tournaments.find(t => t._id === selectedTourneyId)?.startDate}
-        isGenerating={!!isGenerating}
-      />
     </div>
   );
 }

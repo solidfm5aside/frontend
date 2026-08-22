@@ -680,7 +680,8 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                   <>
                     <button
                       type="button"
-                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
+                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo) || !match.date || !match.venue}
+                      title={!match.date || !match.venue ? 'Add the physically confirmed kickoff and venue before starting this match' : undefined}
                       onClick={() => void handleStatusUpdate('live')}
                       className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
                     >

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import {
@@ -7,7 +8,6 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   CircleDot,
@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
-  Sparkles,
   Trash2,
   Trophy,
   Users,
@@ -26,12 +25,12 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
 import { Select } from '@/components/ui/Select';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
+import { OfficialFixtureEditor } from '@/components/admin/OfficialFixtureEditor';
+import { OfficialQuarterFinalEditor } from '@/components/admin/OfficialQuarterFinalEditor';
 import {
   CompetitionDraw,
   CompetitionCommitteeDecisionMethod,
-  CompetitionDrawMode,
   CompetitionEntry,
-  CompetitionFixturePlan,
   CompetitionGroupKey,
   CompetitionOverview,
   CompetitionRankingSnapshot,
@@ -77,6 +76,11 @@ interface CommitteeTieResolutionInput {
   note?: string;
 }
 
+interface VenueOption {
+  _id: string;
+  name: string;
+}
+
 interface CompetitionRankingView extends CompetitionRankingSnapshot {
   workflowRevision: number;
   resolutionHistory: CompetitionTieResolutionAuditEntry[];
@@ -108,26 +112,24 @@ const RANKING_AUDIT_WORKFLOW_STATES = new Set([
   'knockout_stage',
   'completed',
 ]);
-const DRAW_MODE_LABELS: Record<CompetitionDrawMode, string> = {
-  manual: 'Manual pairings',
-  random: 'Random draw',
-  seeded_cross_group: 'Fixed cross-group quarter-finals',
-};
-const FIXED_QUARTER_FINALS = [
-  { slot: 1, home: { groupKey: 'A', rank: 1 }, away: { groupKey: 'B', rank: 4 } },
-  { slot: 2, home: { groupKey: 'A', rank: 2 }, away: { groupKey: 'B', rank: 3 } },
-  { slot: 3, home: { groupKey: 'B', rank: 1 }, away: { groupKey: 'A', rank: 4 } },
-  { slot: 4, home: { groupKey: 'B', rank: 2 }, away: { groupKey: 'A', rank: 3 } },
-] as const;
-const FIXED_FORMAT_SUMMARY = [
-  { label: 'Field', value: '14 teams', detail: 'Two manual groups of seven' },
+const CONFIRMED_FORMAT_SUMMARY = [
+  { label: 'Field', value: '14 teams', detail: 'Group A (Pot 1) • Group B (Pot 2)' },
   { label: 'Group stage', value: 'Single leg', detail: 'Six matches per team • 42 total' },
   { label: 'Qualification', value: 'Top four', detail: 'Eight quarter-finalists' },
-  { label: 'Knockout', value: 'Fixed QF', detail: 'Cross-group position pairings' },
+  { label: 'Knockout', value: 'Physical record', detail: 'Official pairings entered by an administrator' },
   { label: 'Squad', value: 'Max 10', detail: 'Ten registered players per team' },
   { label: 'Placement', value: 'No third', detail: 'Quarter-finals • Semis • Final' },
 ] as const;
 const EXPECTED_GROUP_MATCHES = 42;
+
+function compactFingerprint(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
 const WORKFLOW_STEPS = [
   { key: 'setup', label: 'Rules & teams' },
   { key: 'entries_ready', label: '14 teams' },
@@ -152,7 +154,7 @@ const KNOCKOUT_STAGE_ORDER = ['quarter_finals', 'semi_finals', 'final'];
 const REGISTERED_TEAM_PAGE_SIZE = 100;
 
 const inputClassName =
-  'w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-bold text-white outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 [color-scheme:dark]';
+  'w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-base font-bold text-white outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 [color-scheme:dark] [@media(pointer:fine)]:text-sm';
 const labelClassName = 'text-[9px] font-black uppercase tracking-[0.18em] text-neutral-500';
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -211,10 +213,10 @@ function progressionButtonLabel(workflowState: string, currentStage: string) {
   if (workflowState === 'completed') return 'Competition completed';
   if (currentStage === 'final') return 'Confirm champion & complete';
   const nextStage: Record<string, string> = {
-    quarter_finals: 'semi-finals',
-    semi_finals: 'final fixtures',
+    quarter_finals: 'Confirm semi-finalists',
+    semi_finals: 'Confirm finalists',
   };
-  return `Create ${nextStage[currentStage] ?? 'next round'}`;
+  return nextStage[currentStage] ?? 'Advance official bracket';
 }
 
 function emptyGroupSlots(): Record<CompetitionGroupKey, string[]> {
@@ -487,6 +489,7 @@ function CommitteeDecisionAuditHistory({
 export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2CompetitionPanelProps) {
   const [overview, setOverview] = useState<CompetitionOverview | null>(null);
   const [registeredTeams, setRegisteredTeams] = useState<CompetitionTeamSummary[]>([]);
+  const [venues, setVenues] = useState<VenueOption[]>([]);
   const [draws, setDraws] = useState<CompetitionDraw[]>([]);
   const [rankingState, setRankingState] = useState<CompetitionRankingView | null>(null);
   const [rankingError, setRankingError] = useState<string | null>(null);
@@ -502,9 +505,6 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     endDate: '',
   });
   const [groupSlots, setGroupSlots] = useState<Record<CompetitionGroupKey, string[]>>(emptyGroupSlots);
-  const [matchesPerDay, setMatchesPerDay] = useState('');
-  const [fixturePlan, setFixturePlan] = useState<CompetitionFixturePlan | null>(null);
-  const idempotencyKeys = useRef(new Map<string, string>());
   const competitionRequestSequence = useRef(0);
   const rankingRequestSequence = useRef(0);
 
@@ -513,7 +513,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     if (!silent) setIsLoading(true);
     setLoadError(null);
     try {
-      const [overviewResponse, registeredTeamResults, drawsResponse] = await Promise.all([
+      const [overviewResponse, registeredTeamResults, drawsResponse, venuesResponse] = await Promise.all([
         apiClient.get<ApiResponse<CompetitionOverview>, ApiResponse<CompetitionOverview>>(
           `/tournaments/${tournamentId}/competition`,
         ),
@@ -521,8 +521,9 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
         apiClient.get<ApiResponse<CompetitionDraw[]>, ApiResponse<CompetitionDraw[]>>(
           `/tournaments/${tournamentId}/competition/draws`,
         ),
+        apiClient.get<ApiResponse<VenueOption[]>, ApiResponse<VenueOption[]>>('/venues'),
       ]);
-      if (!overviewResponse.success || !drawsResponse.success) {
+      if (!overviewResponse.success || !drawsResponse.success || !venuesResponse.success) {
         throw new Error('The competition workspace could not be loaded');
       }
       if (requestSequence !== competitionRequestSequence.current) return;
@@ -531,6 +532,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
       setOverview(nextOverview);
       setRegisteredTeams(registeredTeamResults);
       setDraws(drawsResponse.data);
+      setVenues(venuesResponse.data);
       setGroupSlots(groupsFromEntries(nextOverview.entries));
       setMetadataDraft({
         name: nextOverview.tournament.name,
@@ -538,9 +540,6 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
         startDate: dateInputValue(nextOverview.tournament.startDate),
         endDate: dateInputValue(nextOverview.tournament.endDate),
       });
-      setFixturePlan((current) =>
-        current?.tournamentRevision === nextOverview.progress.workflowRevision ? current : null,
-      );
       if (nextOverview.progress.workflowState === 'group_stage') {
         rankingRequestSequence.current += 1;
         setIsRankingLoading(false);
@@ -618,13 +617,8 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
   }, [fetchRanking, workflowRevision, workflowState]);
 
   const getIdempotencyKey = (operation: string, revision: number, detail = '') => {
-    const cacheKey = `${operation}:${revision}:${detail}`;
-    const existing = idempotencyKeys.current.get(cacheKey);
-    if (existing) return existing;
-    const uniquePart = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const key = `solidfm:${tournamentId}:${operation}:${uniquePart}`;
-    idempotencyKeys.current.set(cacheKey, key);
-    return key;
+    const requestFingerprint = compactFingerprint(`${operation}:${revision}:${detail}`);
+    return `solidfm:${tournamentId}:${operation}:${revision}:${requestFingerprint}`;
   };
 
   const entryTeamIds = useMemo(
@@ -644,21 +638,6 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
   const teamNameById = useMemo(
     () => new Map(overview?.entries.map((entry) => [entry.teamId._id, entry.teamId.name]) ?? []),
     [overview?.entries],
-  );
-  const qualificationByEntryId = useMemo(
-    () => new Map(
-      overview?.tournament.qualificationSnapshot.map((entry) => [entry.tournamentEntryId, entry]) ?? [],
-    ),
-    [overview?.tournament.qualificationSnapshot],
-  );
-  const qualificationByPosition = useMemo(
-    () => new Map(
-      overview?.tournament.qualificationSnapshot.map((entry) => [
-        `${entry.groupKey}:${entry.rank}`,
-        entry,
-      ]) ?? [],
-    ),
-    [overview?.tournament.qualificationSnapshot],
   );
 
   if (isLoading && !overview) {
@@ -691,8 +670,8 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     tournament.competitionRules.teamsPerGroup === 7 &&
     tournament.competitionRules.roundRobinLegs === 1 &&
     tournament.competitionRules.qualifiersPerGroup === 4 &&
-    tournament.competitionRules.drawMode === 'seeded_cross_group' &&
-    tournament.competitionRules.avoidSameGroupFirstRound === true &&
+    tournament.competitionRules.drawMode === 'manual' &&
+    tournament.competitionRules.avoidSameGroupFirstRound === false &&
     tournament.competitionRules.thirdPlaceMatch === false &&
     tournament.competitionRules.maxRosterPlayers === 10 &&
     CONFIRMED_TIE_BREAKERS.every(
@@ -855,54 +834,6 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     }
   };
 
-  const handlePreviewFixtures = async () => {
-    const perDay = Number(matchesPerDay);
-    if (!Number.isInteger(perDay) || perDay < 3 || perDay > 28 || busyAction) return;
-    setBusyAction('preview');
-    try {
-      const response = await apiClient.post<ApiResponse<CompetitionFixturePlan>, ApiResponse<CompetitionFixturePlan>>(
-        `/tournaments/${tournamentId}/competition/group-fixtures/preview`,
-        { matchesPerDay: perDay },
-      );
-      if (!response.success) throw new Error(response.message || 'Fixture preview could not be created');
-      setFixturePlan(response.data);
-      toast.success(`${response.data.totalMatches} group fixtures previewed`);
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to preview group fixtures'));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handlePublishFixtures = async () => {
-    if (!fixturePlan || busyAction || !canManageCompetition) return;
-    if (!window.confirm(`Publish all ${fixturePlan.totalMatches} group-stage fixtures? Setup will be locked.`)) return;
-    setBusyAction('publish-fixtures');
-    try {
-      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(
-        `/tournaments/${tournamentId}/competition/group-fixtures/publish`,
-        {
-          expectedRevision: revision,
-          planHash: fixturePlan.planHash,
-          matchesPerDay: fixturePlan.matchesPerDay,
-        },
-        {
-          headers: {
-            'Idempotency-Key': getIdempotencyKey('publish-fixtures', revision, fixturePlan.planHash),
-          },
-        },
-      );
-      if (!response.success) throw new Error(response.message || 'Fixtures could not be published');
-      toast.success('Group-stage fixtures published');
-      setFixturePlan(null);
-      await fetchCompetition(true);
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to publish group fixtures'));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const handleFinalizeQualification = async () => {
     if (!groupStageComplete || busyAction || !canManageCompetition) return;
     if (!window.confirm('Finalize the qualifiers from the completed group tables?')) return;
@@ -963,63 +894,15 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     }
   };
 
-  const handleCreateDraw = async () => {
-    if (busyAction || !canManageCompetition) return;
-    if (currentDraftDraw && !window.confirm('Create a replacement fixed quarter-final draft? The current draft will remain in the audit history.')) return;
-    setBusyAction('create-draw');
-    try {
-      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(
-        `/tournaments/${tournamentId}/competition/draws`,
-        { expectedRevision: revision },
-        {
-          headers: {
-            'Idempotency-Key': getIdempotencyKey('create-draw', revision, 'fixed-quarter-finals'),
-          },
-        },
-      );
-      if (!response.success) throw new Error(response.message || 'Draw could not be created');
-      toast.success('Fixed quarter-final draft created');
-      await fetchCompetition(true);
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to create knockout draw'));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handlePublishDraw = async (draw: CompetitionDraw) => {
-    if (busyAction || !canManageCompetition) return;
-    if (!window.confirm(`Publish bracket version ${draw.version} and schedule the four quarter-finals?`)) return;
-    setBusyAction('publish-draw');
-    try {
-      const response = await apiClient.post<ApiResponse<unknown>, ApiResponse<unknown>>(
-        `/tournaments/${tournamentId}/competition/draws/${draw._id}/publish`,
-        { expectedRevision: revision },
-        {
-          headers: {
-            'Idempotency-Key': getIdempotencyKey('publish-draw', revision, draw._id),
-          },
-        },
-      );
-      if (!response.success) throw new Error(response.message || 'Draw could not be published');
-      toast.success('Quarter-finals published');
-      await fetchCompetition(true);
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error, 'Failed to publish knockout draw'));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const handleProgressKnockout = async () => {
     if (!canManageCompetition || !allowedActions.progressKnockout || !progressionReady || busyAction) return;
     const actionLabel = progressionButtonLabel(progress.workflowState, tournament.currentStage);
-    if (!window.confirm(`${actionLabel}? Completed results and validated winners will be locked into the bracket.`)) return;
+    if (!window.confirm(`${actionLabel}? Validated winners will be recorded in the next official round with kickoff and venue left TBC.`)) return;
     setBusyAction('progress-knockout');
     try {
       const response = await apiClient.post<
-        ApiResponse<{ action: 'round_materialized' | 'competition_completed' | 'third_place_recorded'; stage?: string; fixtureCount?: number }>,
-        ApiResponse<{ action: 'round_materialized' | 'competition_completed' | 'third_place_recorded'; stage?: string; fixtureCount?: number }>
+        ApiResponse<{ action: 'round_advanced' | 'competition_completed'; stage?: string; fixtureCount?: number }>,
+        ApiResponse<{ action: 'round_advanced' | 'competition_completed'; stage?: string; fixtureCount?: number }>
       >(
         `/tournaments/${tournamentId}/competition/knockout/progress`,
         { expectedRevision: revision },
@@ -1036,7 +919,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
       if (!response.success) throw new Error(response.message || 'The knockout bracket could not progress');
       const successMessage = response.data.action === 'competition_completed'
         ? 'Champion confirmed and competition completed'
-        : `${humanize(response.data.stage ?? 'Next round')} fixtures created`;
+        : `${humanize(response.data.stage ?? 'Next round')} participants confirmed; official schedule remains TBC`;
       toast.success(successMessage);
       await fetchCompetition(true);
     } catch (error: unknown) {
@@ -1044,20 +927,6 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     } finally {
       setBusyAction(null);
     }
-  };
-
-  const qualifiedName = (entryId: string) => {
-    const entry = entryById.get(entryId);
-    const snapshot = qualificationByEntryId.get(entryId);
-    return entry?.teamId.name ?? (snapshot ? `Group ${snapshot.groupKey} #${snapshot.rank}` : 'Unknown qualifier');
-  };
-
-  const drawTeamName = (team: CompetitionTeamSummary | string, entryId: string) =>
-    typeof team === 'string' ? qualifiedName(entryId) : team.name;
-
-  const qualifiedPositionName = (groupKey: CompetitionGroupKey, rank: number) => {
-    const qualified = qualificationByPosition.get(`${groupKey}:${rank}`);
-    return qualified ? qualifiedName(qualified.tournamentEntryId) : `${groupKey}${rank}`;
   };
 
   return (
@@ -1136,7 +1005,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
       <StepCard
         number={1}
         title="Season details & confirmed format"
-        summary={confirmedRulesPersisted ? 'Fixed 14-team rules are active' : 'Competition format needs attention'}
+        summary={confirmedRulesPersisted ? 'Confirmed 14-team rules are active' : 'Competition format needs attention'}
         complete={confirmedRulesPersisted}
         defaultOpen={!confirmedRulesPersisted}
       >
@@ -1179,14 +1048,14 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-black uppercase tracking-widest text-white">Confirmed competition format</p>
-                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-neutral-600">These sporting rules are fixed for this competition and cannot be altered per season.</p>
+                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-neutral-600">These sporting rules are confirmed for this competition and cannot be altered per season.</p>
               </div>
               <span className={clsx('w-fit rounded-full border px-3 py-1 text-[8px] font-black uppercase tracking-widest', confirmedRulesPersisted ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-red-500/20 bg-red-500/10 text-red-300')}>
                 {confirmedRulesPersisted ? 'Format active' : 'Format mismatch'}
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {FIXED_FORMAT_SUMMARY.map((item) => (
+              {CONFIRMED_FORMAT_SUMMARY.map((item) => (
                 <div key={item.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
                   <p className="text-[8px] font-black uppercase tracking-widest text-neutral-600">{item.label}</p>
                   <p className="mt-2 text-sm font-black text-white">{item.value}</p>
@@ -1206,7 +1075,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
               </ol>
             </div>
             {!confirmedRulesPersisted ? (
-              <p role="alert" className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">The server did not return the confirmed fixed format. Reload after the backend update; fixture publication remains blocked until the persisted rules match.</p>
+              <p role="alert" className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">The server did not return the confirmed competition format. Reload after the backend update; fixture publication remains blocked until the persisted rules match.</p>
             ) : null}
           </div>
         </div>
@@ -1278,67 +1147,30 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
         </div>
       </StepCard>
 
-      <StepCard number={4} title="Group fixtures" summary={progress.workflowState === 'group_stage' ? `${completedGroupMatches} of ${expectedGroupMatches} completed` : 'Preview the exact 42-match single-leg schedule before publishing'} complete={['group_stage', 'qualification_finalized', 'knockout_stage'].includes(progress.workflowState)} defaultOpen={progress.workflowState === 'groups_assigned'}>
-        {progress.workflowState === 'groups_assigned' ? (
-          <div className="space-y-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="min-w-0 flex-1 space-y-2">
-                <label htmlFor={`matches-per-day-${tournamentId}`} className={labelClassName}>Matches per calendar day</label>
-                <input id={`matches-per-day-${tournamentId}`} type="number" min={3} max={28} value={matchesPerDay} onChange={(event) => { setMatchesPerDay(event.target.value); setFixturePlan(null); }} placeholder="Enter an approved number (3–28)" className={inputClassName} />
-                <p className="text-[9px] text-neutral-600">Minimum 3 keeps each combined Group A/B round within its Saturday–Sunday matchweek.</p>
-              </div>
-              <button type="button" onClick={() => void handlePreviewFixtures()} disabled={!allowedActions.previewFixtures || !matchesPerDay || Boolean(busyAction)} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-6 text-[10px] font-black uppercase tracking-widest text-blue-300 disabled:cursor-not-allowed disabled:opacity-40">
-                {busyAction === 'preview' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />} Preview schedule
-              </button>
-            </div>
-
-            {fixturePlan ? (
-              <div className="overflow-hidden rounded-2xl border border-white/5">
-                <div className="flex flex-col gap-3 bg-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-black text-white">{fixturePlan.totalMatches} fixtures • Single round robin</p>
-                    <p className="mt-1 text-[8px] font-bold uppercase tracking-widest text-neutral-500">Verified plan {fixturePlan.planHash.slice(0, 12)}…</p>
-                  </div>
-                  {canManageCompetition ? (
-                    <button type="button" onClick={() => void handlePublishFixtures()} disabled={!allowedActions.publishFixtures || fixturePlan.tournamentRevision !== revision || Boolean(busyAction)} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:opacity-40">
-                      {busyAction === 'publish-fixtures' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} Publish fixtures
-                    </button>
-                  ) : <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-neutral-500"><LockKeyhole className="h-3.5 w-3.5" /> Administrator access required</span>}
-                </div>
-                <div className="max-h-96 overflow-auto">
-                  <table className="w-full min-w-[720px] text-left text-xs">
-                    <caption className="sr-only">Group-stage fixture preview</caption>
-                    <thead className="sticky top-0 bg-[#07131a] text-[8px] font-black uppercase tracking-widest text-neutral-500">
-                      <tr><th scope="col" className="px-4 py-3">Group</th><th scope="col" className="px-4 py-3">Round</th><th scope="col" className="px-4 py-3">Fixture</th><th scope="col" className="px-4 py-3">Date</th><th scope="col" className="px-4 py-3">Venue</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {fixturePlan.fixtures.map((fixture) => (
-                        <tr key={fixture.fixtureKey} className="text-neutral-300">
-                          <td className="px-4 py-3 font-black text-blue-400">{fixture.groupKey}</td>
-                          <td className="px-4 py-3">L{fixture.leg} • R{fixture.round}</td>
-                          <td className="px-4 py-3 font-bold text-white">{fixture.homeTeamName} <span className="text-neutral-600">vs</span> {fixture.awayTeamName}</td>
-                          <td className="whitespace-nowrap px-4 py-3">{new Date(fixture.date).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                          <td className="px-4 py-3">{fixture.venue}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : null}
-          </div>
+      <StepCard
+        number={4}
+        title="Official group fixtures"
+        summary={currentWorkflowIndex >= 3 ? `${completedGroupMatches} completed • ${scheduledGroupMatches} scheduled • ${liveGroupMatches} live` : 'Record the exact 42 physical fixtures, then review and publish'}
+        complete={currentWorkflowIndex >= 3}
+        defaultOpen={progress.workflowState === 'groups_assigned'}
+      >
+        {progress.workflowState === 'groups_assigned' || currentWorkflowIndex >= 3 ? (
+          <OfficialFixtureEditor
+            tournamentId={tournamentId}
+            revision={revision}
+            entries={entries}
+            venues={venues}
+            canManage={canManageCompetition}
+            canReview={allowedActions.previewFixtures}
+            canPublish={allowedActions.publishFixtures}
+            onPublished={() => fetchCompetition(true)}
+          />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { label: 'Scheduled', value: scheduledGroupMatches },
-              { label: 'Live', value: liveGroupMatches },
-              { label: 'Completed', value: completedGroupMatches },
-            ].map((item) => <div key={item.label} className="rounded-2xl border border-white/5 bg-black/20 p-4 text-center"><p className="text-2xl font-black italic text-white">{item.value}</p><p className="mt-1 text-[8px] font-black uppercase tracking-widest text-neutral-600">{item.label}</p></div>)}
-          </div>
+          <p className="rounded-2xl border border-white/5 bg-black/20 p-5 text-xs text-neutral-500">Save all 14 group positions before recording the physical fixture sheet.</p>
         )}
       </StepCard>
 
-      <StepCard number={5} title="Qualification & knockout workflow" summary={progress.workflowState === 'completed' ? `Champion: ${bracket.championTeam?.name ?? 'recorded'}` : progress.workflowState === 'group_stage' ? `${completedGroupMatches}/${expectedGroupMatches} group matches complete` : latestDraw ? `Quarter-final bracket v${latestDraw.version} • ${latestDraw.status}` : 'Finalize the top four in each group, then publish the fixed quarter-finals'} complete={progress.workflowState === 'completed'} defaultOpen={['group_stage', 'qualification_finalized', 'knockout_stage', 'completed'].includes(progress.workflowState)}>
+      <StepCard number={5} title="Qualification & official knockout record" summary={progress.workflowState === 'completed' ? `Champion: ${bracket.championTeam?.name ?? 'recorded'}` : progress.workflowState === 'group_stage' ? `${completedGroupMatches}/${expectedGroupMatches} group matches complete` : latestDraw ? `Official quarter-finals v${latestDraw.version} • ${latestDraw.status}` : 'Finalize the top four, then record the physically confirmed quarter-finals'} complete={progress.workflowState === 'completed'} defaultOpen={['group_stage', 'qualification_finalized', 'knockout_stage', 'completed'].includes(progress.workflowState)}>
         <div className="space-y-6">
           {progress.workflowState === 'group_stage' ? (
             <div className="space-y-5">
@@ -1477,6 +1309,10 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
 
           {progress.workflowState === 'qualification_finalized' ? (
             <div className="space-y-5">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-white">Eight confirmed qualifiers</p>
+                <p className="mt-1 text-xs text-neutral-500">These are the only teams available when recording the four physically confirmed quarter-finals.</p>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {tournament.qualificationSnapshot.map((qualified) => {
                   const entry = entryById.get(qualified.tournamentEntryId);
@@ -1489,53 +1325,17 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                 })}
               </div>
 
-              <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white">Fixed quarter-final path</p>
-                <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-neutral-600">Pairings come directly from final group positions; there is no random or manual draw.</p>
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  {FIXED_QUARTER_FINALS.map((pairing) => (
-                    <div key={pairing.slot} className="grid grid-cols-[26px_minmax(0,1fr)_22px_minmax(0,1fr)] items-center gap-2 rounded-xl border border-white/5 p-3">
-                      <span className="text-[9px] font-black text-blue-400">QF{pairing.slot}</span>
-                      <span className="min-w-0 truncate text-[10px] font-bold text-white" title={qualifiedPositionName(pairing.home.groupKey, pairing.home.rank)}>{pairing.home.groupKey}{pairing.home.rank} • {qualifiedPositionName(pairing.home.groupKey, pairing.home.rank)}</span>
-                      <span className="text-center text-[8px] font-black text-neutral-700">VS</span>
-                      <span className="min-w-0 truncate text-right text-[10px] font-bold text-white" title={qualifiedPositionName(pairing.away.groupKey, pairing.away.rank)}>{pairing.away.groupKey}{pairing.away.rank} • {qualifiedPositionName(pairing.away.groupKey, pairing.away.rank)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-600">Creating the fixed bracket saves a reviewable draft; publishing it schedules the quarter-finals.</p>
-                {canManageCompetition ? (
-                  <button type="button" onClick={() => void handleCreateDraw()} disabled={!allowedActions.createDraw || Boolean(busyAction)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-[9px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
-                    {busyAction === 'create-draw' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {currentDraftDraw ? 'Replace bracket draft' : 'Create QF bracket'}
-                  </button>
-                ) : <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-neutral-600"><LockKeyhole className="h-3.5 w-3.5" /> Administrator access required</span>}
-              </div>
-            </div>
-          ) : null}
-
-          {currentDraftDraw ? (
-            <div className="overflow-hidden rounded-2xl border border-blue-500/20">
-              <div className="flex flex-col gap-3 bg-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-black text-white">Fixed quarter-final bracket • Version {currentDraftDraw.version}</p>
-                  <p className="mt-1 text-[8px] font-black uppercase tracking-widest text-blue-300">{DRAW_MODE_LABELS[currentDraftDraw.mode]}</p>
-                </div>
-                {canManageCompetition && progress.workflowState === 'qualification_finalized' ? (
-                  <button type="button" onClick={() => void handlePublishDraw(currentDraftDraw)} disabled={Boolean(busyAction)} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:opacity-40">
-                    {busyAction === 'publish-draw' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trophy className="h-4 w-4" />} Publish quarter-finals
-                  </button>
-                ) : null}
-              </div>
-              <div className="grid gap-px bg-white/5 sm:grid-cols-2">
-                {currentDraftDraw.pairings.map((pairing) => (
-                  <div key={pairing.slot} className="bg-[#07131a] p-4 text-xs">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-neutral-600">Match {pairing.slot}</span>
-                    <p className="mt-2 font-bold text-white">{drawTeamName(pairing.homeTeamId, pairing.homeEntryId)} <span className="px-1 text-neutral-600">vs</span> {drawTeamName(pairing.awayTeamId, pairing.awayEntryId)}</p>
-                  </div>
-                ))}
-              </div>
+              <OfficialQuarterFinalEditor
+                tournamentId={tournamentId}
+                revision={revision}
+                qualificationSnapshot={tournament.qualificationSnapshot}
+                entries={entries}
+                venues={venues}
+                draft={currentDraftDraw ?? null}
+                canManage={canManageCompetition}
+                canCreate={allowedActions.createDraw}
+                onRefresh={() => fetchCompetition(true)}
+              />
             </div>
           ) : null}
 
@@ -1569,18 +1369,32 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                         {nodes.map((node) => {
                           const homeName = node.match?.homeTeam?.name ?? node.homeTeam?.name ?? 'Awaiting team';
                           const awayName = node.match?.awayTeam?.name ?? node.awayTeam?.name ?? 'Awaiting team';
+                          const schedulePending = !node.match?.date || !node.match?.venue;
+                          const scheduleLabel = node.match?.date
+                            ? new Date(node.match.date).toLocaleString('en-GB', {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                                timeZone: 'Africa/Lagos',
+                              })
+                            : 'Kickoff TBC';
                           return (
                             <div key={node.key} className="bg-[#07131a] p-4">
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-[8px] font-black uppercase tracking-widest text-neutral-600">Match {node.slot}</span>
                                 <span className={clsx('rounded-full px-2 py-1 text-[7px] font-black uppercase tracking-widest', node.match?.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : node.match?.status === 'live' ? 'bg-red-500/10 text-red-400' : 'bg-white/5 text-neutral-600')}>{node.match?.status ?? 'waiting'}</span>
                               </div>
-                              <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+                               <div className="mt-3 flex items-center justify-between gap-3 text-xs">
                                 <span className={clsx('min-w-0 flex-1 truncate font-bold', node.winnerTeam?._id === node.homeTeam?._id ? 'text-yellow-300' : 'text-white')}>{homeName}</span>
                                 <span className="shrink-0 font-black text-neutral-500">{node.match ? `${node.match.homeScore} – ${node.match.awayScore}` : 'vs'}</span>
-                                <span className={clsx('min-w-0 flex-1 truncate text-right font-bold', node.winnerTeam?._id === node.awayTeam?._id ? 'text-yellow-300' : 'text-white')}>{awayName}</span>
-                              </div>
-                            </div>
+                                 <span className={clsx('min-w-0 flex-1 truncate text-right font-bold', node.winnerTeam?._id === node.awayTeam?._id ? 'text-yellow-300' : 'text-white')}>{awayName}</span>
+                               </div>
+                               {node.match ? (
+                                 <div className="mt-3 flex flex-col gap-2 border-t border-white/5 pt-3 text-[8px] font-bold uppercase tracking-wider text-neutral-600 sm:flex-row sm:items-center sm:justify-between">
+                                   <span className={schedulePending ? 'text-yellow-300' : undefined}>{scheduleLabel} • {node.match.venue ?? 'Venue TBC'} • Africa/Lagos</span>
+                                   {canManageCompetition ? <Link href={`/admin/matches?tournament=${tournamentId}&match=${node.match._id}`} className="inline-flex min-h-10 items-center text-white underline decoration-white/20 underline-offset-4">{schedulePending ? 'Add official schedule' : 'Edit schedule'}</Link> : null}
+                                 </div>
+                               ) : null}
+                             </div>
                           );
                         })}
                       </div>
@@ -1593,13 +1407,14 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                 <div className="flex flex-col gap-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-black text-white">{humanize(progressionStage)}: {resolvedProgressionNodes}/{progressionNodes.length} validated result(s)</p>
-                    <p className="mt-1 text-xs text-neutral-400">Every match in this round must be completed with its winner set in the match console.</p>
+                    <p className="mt-1 text-xs text-neutral-400">After every result is validated, record the winners in the next official round. Its kickoff and venue remain TBC until entered in Match Centre.</p>
                   </div>
                   {canManageCompetition ? (
                     <button type="button" onClick={() => void handleProgressKnockout()} disabled={!progressionReady || Boolean(busyAction)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
                       {busyAction === 'progress-knockout' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} {progressionButtonLabel(progress.workflowState, tournament.currentStage)}
                     </button>
                   ) : <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-neutral-600"><LockKeyhole className="h-3.5 w-3.5" /> Administrator access required</span>}
+                  <Link href={`/admin/matches?tournament=${tournamentId}`} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20 px-4 text-[9px] font-black uppercase tracking-widest text-white hover:bg-black/30">Open Match Centre</Link>
                 </div>
               ) : null}
             </div>
@@ -1607,7 +1422,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
 
           <div className="flex items-start gap-3 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-xs leading-relaxed text-yellow-100/80">
             <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-yellow-400" />
-            <span>The knockout route is fixed: A1–B4, A2–B3, B1–A4, and B2–A3, followed by semi-finals and the final. There is no random draw, play-in, bye, or third-place match.</span>
+            <span>The application never chooses knockout pairings or invents a schedule. Administrators record the physically confirmed quarter-finals, then validate winners into the semi-finals and final. No third-place match is played.</span>
           </div>
         </div>
       </StepCard>

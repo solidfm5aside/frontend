@@ -3,6 +3,7 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { Clock, Trophy, Zap } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { formatTime } from '@/utils/format';
 
 interface BracketTeam {
   _id: string;
@@ -16,8 +17,9 @@ interface BracketMatch {
   homeScore: number;
   awayScore: number;
   status: string;
-  date: string;
-  venue?: string;
+  date: string | null;
+  venue?: string | null;
+  scheduleStatus?: 'confirmed' | 'pending';
   winner?: string | BracketTeam | null;
   isExtraTime?: boolean;
   shootoutScore?: { home: number; away: number };
@@ -105,7 +107,7 @@ function sourcePlaceholder(source: V2BracketSource): BracketTeam {
   const drawSide = source.drawSide ? ` ${source.drawSide}` : '';
   return {
     _id: `placeholder:draw:${source.drawPairingSlot ?? 0}:${source.drawSide ?? ''}`,
-    name: `Quarter-final pairing ${source.drawPairingSlot ?? ''}${drawSide}`.trim(),
+    name: `Official quarter-final pairing ${source.drawPairingSlot ?? ''}${drawSide}`.trim(),
   };
 }
 
@@ -135,7 +137,9 @@ function normalizeBracketData(value: BracketData | V2BracketState): BracketData 
           homeScore: 0,
           awayScore: 0,
           status: 'pending',
-          date: '',
+          date: null,
+          venue: null,
+          scheduleStatus: 'pending',
           winner: node.winnerTeam ?? null,
         } satisfies BracketMatch;
       }),
@@ -203,10 +207,17 @@ function getWinnerId(winner: BracketMatch['winner']) {
   return typeof winner === 'string' ? winner : winner._id;
 }
 
-function formatMatchDate(date: string) {
+function formatMatchSchedule(date: string | null) {
+  if (!date) return 'Schedule TBC';
   const parsedDate = new Date(date);
-  if (Number.isNaN(parsedDate.getTime())) return 'Date TBC';
-  return parsedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (Number.isNaN(parsedDate.getTime())) return 'Schedule TBC';
+  const matchDate = parsedDate.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Africa/Lagos',
+  });
+  return `${matchDate} • ${formatTime(date)}`;
 }
 
 function MatchCard({ match }: { match: BracketMatch }) {
@@ -220,13 +231,14 @@ function MatchCard({ match }: { match: BracketMatch }) {
 
   return (
     <article className="group relative rounded-3xl border border-white/5 bg-white/[0.02] p-4 backdrop-blur-3xl transition-all duration-500 hover:border-blue-500/20 hover:bg-white/[0.04]">
-      <div className="mb-4 flex min-h-5 items-center justify-end text-[7px] font-black uppercase tracking-[0.2em] text-neutral-600">
+      <div className="mb-4 flex min-h-5 items-center justify-between gap-3 text-[7px] font-black uppercase tracking-[0.2em] text-neutral-600">
+        <span className="truncate" title={match.venue || 'Venue TBC'}>{match.venue || 'Venue TBC'}</span>
         {match.status === 'live' ? (
           <span className="text-red-400" role="status">● Live</span>
         ) : match.status === 'completed' ? (
           'Final Result'
         ) : (
-          formatMatchDate(match.date)
+          formatMatchSchedule(match.date)
         )}
       </div>
 
@@ -398,8 +410,8 @@ export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutB
           <Trophy aria-hidden="true" className="mx-auto mb-6 h-12 w-12 text-neutral-800 opacity-20" />
           <p className="text-[10px] font-black uppercase leading-loose tracking-[0.25em] text-neutral-600 italic sm:tracking-[0.4em]">
             {filterStage
-              ? `No ${getStageLabel(filterStage)} fixtures have been drawn yet.`
-              : 'Knockout fixtures have not been generated yet.'}
+              ? `No official ${getStageLabel(filterStage)} fixtures have been recorded yet.`
+              : 'Official knockout fixtures have not been recorded yet.'}
           </p>
         </div>
       )}

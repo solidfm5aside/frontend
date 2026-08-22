@@ -23,8 +23,10 @@ export interface Match {
   groupKey?: 'A' | 'B';
   round?: number;
   leg?: number;
-  date: string;
-  venue?: string;
+  date: string | null;
+  venue?: string | null;
+  scheduleStatus?: 'confirmed' | 'pending';
+  officialFixtureNumber?: number;
   isExtraTime?: boolean;
   winner?: string | { _id: string; name: string };
   shootoutScore?: { home: number; away: number };

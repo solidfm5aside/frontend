@@ -9,7 +9,7 @@ import EditMatchModal from '@/components/admin/EditMatchModal';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { Select } from '@/components/ui/Select';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
+import { formatMatchDayKey, formatTime, getDayKey, TBC_DAY_KEY } from '@/utils/format';
 import type { ApiResponse } from '@/types';
 import {
   chooseTournament,
@@ -30,8 +30,10 @@ interface Match {
   awayScore: number;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   stage: string;
-  date: string;
-  venue?: string;
+  date: string | null;
+  venue?: string | null;
+  scheduleStatus?: 'confirmed' | 'pending';
+  officialFixtureNumber?: number;
 }
 
 const KNOCKOUT_STAGES = new Set([
@@ -59,6 +61,9 @@ export default function MatchesManagementPage() {
   const backgroundRefreshQueued = useRef(false);
   const foregroundRequestPending = useRef(false);
   const requestSequence = useRef(0);
+  const requestedMatchId = useRef<string | null>(null);
+  const requestedFixtureNumber = useRef<number | null>(null);
+  const queryTargetHandled = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +79,13 @@ export default function MatchesManagementPage() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = chooseTournament(response.data, ['completed', 'upcoming']);
+        const query = new URLSearchParams(window.location.search);
+        const queryTournamentId = query.get('tournament');
+        requestedMatchId.current = query.get('match');
+        const fixtureNumber = Number(query.get('fixture'));
+        requestedFixtureNumber.current = Number.isInteger(fixtureNumber) && fixtureNumber > 0 ? fixtureNumber : null;
+        const preferredTournament = response.data.find((tournament) => tournament._id === queryTournamentId)
+          ?? chooseTournament(response.data, ['completed', 'upcoming']);
         setTournaments(response.data);
         setSelectedTournamentId(preferredTournament?._id ?? '');
         foregroundRequestPending.current = Boolean(preferredTournament);
@@ -136,7 +147,11 @@ export default function MatchesManagementPage() {
   // Group matches by their calendar day
   const matchesByDay = useMemo(() => {
     const map: Record<string, Match[]> = {};
-    [...matches].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(m => {
+    [...matches].sort((a, b) => {
+      if (!a.date) return b.date ? -1 : 0;
+      if (!b.date) return 1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    }).forEach(m => {
       const key = getDayKey(m.date);
       if (!map[key]) map[key] = [];
       map[key].push(m);
@@ -144,7 +159,11 @@ export default function MatchesManagementPage() {
     return map;
   }, [matches]);
 
-  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort(), [matchesByDay]);
+  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((left, right) => {
+    if (left === TBC_DAY_KEY) return -1;
+    if (right === TBC_DAY_KEY) return 1;
+    return left.localeCompare(right);
+  }), [matchesByDay]);
 
   // Keep the selected matchday valid as filters and tournaments change.
   useEffect(() => {
@@ -154,8 +173,10 @@ export default function MatchesManagementPage() {
     }
 
     if (!selectedDate || !sortedDays.includes(selectedDate)) {
-      const today = new Date().toISOString().split('T')[0];
-      const targetDate = sortedDays.find(d => d >= today) || sortedDays[sortedDays.length - 1];
+      const today = getDayKey(new Date().toISOString());
+      const targetDate = sortedDays.includes(TBC_DAY_KEY)
+        ? TBC_DAY_KEY
+        : sortedDays.find(d => d >= today) || sortedDays[sortedDays.length - 1];
       setSelectedDate(targetDate);
     }
   }, [sortedDays, selectedDate]);
@@ -163,6 +184,18 @@ export default function MatchesManagementPage() {
   const currentIndex = selectedDate ? sortedDays.indexOf(selectedDate) : -1;
   const currentDayMatches = selectedDate ? matchesByDay[selectedDate] ?? [] : [];
   const totalDays = sortedDays.length;
+
+  useEffect(() => {
+    if (queryTargetHandled.current || matches.length === 0) return;
+    const requested = requestedMatchId.current
+      ? matches.find((match) => match._id === requestedMatchId.current)
+      : matches.find((match) => match.officialFixtureNumber === requestedFixtureNumber.current);
+    if (!requested) return;
+    queryTargetHandled.current = true;
+    setSelectedDate(getDayKey(requested.date));
+    if (requested.status === 'scheduled') setEditMatchId(requested._id);
+    else setSelectedMatchId(requested._id);
+  }, [matches]);
 
   const handleStatusUpdate = async (id: string, status: Match['status']) => {
     if (status === 'cancelled' && !window.confirm('Cancel this match? It can be restored to the schedule later.')) return;
@@ -210,9 +243,12 @@ export default function MatchesManagementPage() {
                 surface="neutral"
                 aria-busy={isLoading}
                 value={selectedTournamentId}
-                onChange={(event) => {
-                  requestSequence.current += 1;
-                  foregroundRequestPending.current = true;
+                 onChange={(event) => {
+                   requestSequence.current += 1;
+                   foregroundRequestPending.current = true;
+                   queryTargetHandled.current = true;
+                   requestedMatchId.current = null;
+                   requestedFixtureNumber.current = null;
                   setSelectedTournamentId(event.target.value);
                   setMatches([]);
                   setSelectedDate(null);
@@ -295,10 +331,10 @@ export default function MatchesManagementPage() {
 
             <div className="text-center min-w-0">
               <p className="text-xs sm:text-sm font-black italic text-white uppercase tracking-tight truncate">
-                {selectedDate ? formatMatchDay(selectedDate + 'T00:00:00') : '—'}
+                {selectedDate ? formatMatchDayKey(selectedDate) : '—'}
               </p>
               <p className="text-[9px] sm:text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-0.5">
-                Matchday {currentIndex + 1} of {totalDays} · {currentDayMatches.length} fixture{currentDayMatches.length !== 1 ? 's' : ''}
+                {selectedDate === TBC_DAY_KEY ? 'Awaiting official schedule' : `Matchday ${currentIndex + 1} of ${totalDays}`} · {currentDayMatches.length} fixture{currentDayMatches.length !== 1 ? 's' : ''}
               </p>
             </div>
 
@@ -320,7 +356,7 @@ export default function MatchesManagementPage() {
                   key={d}
                   type="button"
                   onClick={() => setSelectedDate(d)}
-                  aria-label={`Show matches for ${formatMatchDay(d + 'T00:00:00')}`}
+                  aria-label={`Show matches for ${formatMatchDayKey(d)}`}
                   aria-current={d === selectedDate ? 'date' : undefined}
                   className={`h-2 rounded-full transition-all ${
                     d === selectedDate ? 'w-6 bg-blue-500' : 'w-2 bg-white/10 hover:bg-white/25'
@@ -337,7 +373,10 @@ export default function MatchesManagementPage() {
                 className="group rounded-2xl sm:rounded-[28px] border border-white/5 bg-white/[0.01] p-4 sm:p-5 backdrop-blur-3xl transition-all hover:bg-white/[0.03] hover:border-blue-500/20"
               >
                 <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <StatusBadge status={match.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={match.status} />
+                    {!match.date || !match.venue ? <span className="rounded-full bg-yellow-500/10 px-2 py-1 text-[7px] font-black uppercase tracking-widest text-yellow-300">Schedule TBC</span> : null}
+                  </div>
                   <div className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black text-neutral-500 uppercase tracking-widest">
                     <Clock className="h-2.5 w-2.5" />
                     {formatTime(match.date)}
@@ -372,14 +411,10 @@ export default function MatchesManagementPage() {
 
                 <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/5 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1 min-w-0">
-                    {match.venue && (
-                      <>
-                        <MapPin className="h-2.5 w-2.5 text-neutral-600 shrink-0" />
-                        <span className="text-[8px] sm:text-[9px] font-black text-neutral-600 uppercase tracking-widest truncate">
-                          {match.venue}
-                        </span>
-                      </>
-                    )}
+                    <MapPin className="h-2.5 w-2.5 text-neutral-600 shrink-0" />
+                    <span className="text-[8px] sm:text-[9px] font-black text-neutral-600 uppercase tracking-widest truncate">
+                      {match.venue || 'Venue TBC'}{match.officialFixtureNumber ? ` • Official #${match.officialFixtureNumber}` : ''}
+                    </span>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
@@ -395,8 +430,10 @@ export default function MatchesManagementPage() {
                         </button>
                         <button
                           type="button"
+                          disabled={!match.date || !match.venue}
+                          title={!match.date || !match.venue ? 'Add the physically confirmed kickoff and venue before starting' : undefined}
                           onClick={() => handleStatusUpdate(match._id, 'live')}
-                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 whitespace-nowrap"
+                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           🚀 Start
                         </button>
@@ -474,8 +511,8 @@ export default function MatchesManagementPage() {
       {editMatchId && (
         <EditMatchModal
           matchId={editMatchId}
-          initialDate={matches.find(m => m._id === editMatchId)?.date || ''}
-          initialVenue={matches.find(m => m._id === editMatchId)?.venue || ''}
+          initialDate={matches.find(m => m._id === editMatchId)?.date ?? null}
+          initialVenue={matches.find(m => m._id === editMatchId)?.venue ?? null}
           onClose={() => setEditMatchId(null)}
           onUpdate={() => void fetchMatches(true)}
         />
