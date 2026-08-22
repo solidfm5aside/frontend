@@ -6,6 +6,12 @@
 export const TBC_DAY_KEY = 'schedule-tbc';
 export const LAGOS_TIME_ZONE = 'Africa/Lagos';
 
+type SchedulableFixture = {
+  _id?: string;
+  date?: string | null;
+  officialFixtureNumber?: number;
+};
+
 function dateParts(date: Date, includeTime = false) {
   const formatter = new Intl.DateTimeFormat('en-GB', {
     timeZone: LAGOS_TIME_ZONE,
@@ -84,4 +90,31 @@ export function getDayKey(dateStr: string | null | undefined): string {
 export function formatMatchDayKey(dayKey: string | null | undefined): string {
   if (!dayKey || dayKey === TBC_DAY_KEY) return 'Schedule TBC';
   return formatMatchDay(`${dayKey}T00:00:00+01:00`);
+}
+
+/**
+ * Keeps confirmed fixtures chronological and sends genuinely unscheduled
+ * fixtures to the end. Official numbering provides deterministic ordering
+ * when two fixtures share a kickoff.
+ */
+export function compareFixtureSchedule(left: SchedulableFixture, right: SchedulableFixture): number {
+  const leftTime = left.date ? new Date(left.date).getTime() : Number.NaN;
+  const rightTime = right.date ? new Date(right.date).getTime() : Number.NaN;
+  const leftIsScheduled = Number.isFinite(leftTime);
+  const rightIsScheduled = Number.isFinite(rightTime);
+
+  if (leftIsScheduled !== rightIsScheduled) return leftIsScheduled ? -1 : 1;
+  if (leftIsScheduled && rightIsScheduled && leftTime !== rightTime) return leftTime - rightTime;
+
+  const leftNumber = left.officialFixtureNumber ?? Number.MAX_SAFE_INTEGER;
+  const rightNumber = right.officialFixtureNumber ?? Number.MAX_SAFE_INTEGER;
+  if (leftNumber !== rightNumber) return leftNumber - rightNumber;
+
+  return (left._id ?? '').localeCompare(right._id ?? '');
+}
+
+export function compareFixtureDayKeys(left: string, right: string): number {
+  if (left === TBC_DAY_KEY) return right === TBC_DAY_KEY ? 0 : 1;
+  if (right === TBC_DAY_KEY) return -1;
+  return left.localeCompare(right);
 }

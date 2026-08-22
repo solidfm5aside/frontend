@@ -9,7 +9,14 @@ import EditMatchModal from '@/components/admin/EditMatchModal';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { Select } from '@/components/ui/Select';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { formatMatchDayKey, formatTime, getDayKey, TBC_DAY_KEY } from '@/utils/format';
+import {
+  compareFixtureDayKeys,
+  compareFixtureSchedule,
+  formatMatchDayKey,
+  formatTime,
+  getDayKey,
+  TBC_DAY_KEY,
+} from '@/utils/format';
 import type { ApiResponse } from '@/types';
 import {
   chooseTournament,
@@ -147,11 +154,7 @@ export default function MatchesManagementPage() {
   // Group matches by their calendar day
   const matchesByDay = useMemo(() => {
     const map: Record<string, Match[]> = {};
-    [...matches].sort((a, b) => {
-      if (!a.date) return b.date ? -1 : 0;
-      if (!b.date) return 1;
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
-    }).forEach(m => {
+    [...matches].sort(compareFixtureSchedule).forEach(m => {
       const key = getDayKey(m.date);
       if (!map[key]) map[key] = [];
       map[key].push(m);
@@ -159,11 +162,10 @@ export default function MatchesManagementPage() {
     return map;
   }, [matches]);
 
-  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((left, right) => {
-    if (left === TBC_DAY_KEY) return -1;
-    if (right === TBC_DAY_KEY) return 1;
-    return left.localeCompare(right);
-  }), [matchesByDay]);
+  const sortedDays = useMemo(
+    () => Object.keys(matchesByDay).sort(compareFixtureDayKeys),
+    [matchesByDay],
+  );
 
   // Keep the selected matchday valid as filters and tournaments change.
   useEffect(() => {
@@ -174,9 +176,10 @@ export default function MatchesManagementPage() {
 
     if (!selectedDate || !sortedDays.includes(selectedDate)) {
       const today = getDayKey(new Date().toISOString());
-      const targetDate = sortedDays.includes(TBC_DAY_KEY)
-        ? TBC_DAY_KEY
-        : sortedDays.find(d => d >= today) || sortedDays[sortedDays.length - 1];
+      const datedDays = sortedDays.filter((day) => day !== TBC_DAY_KEY);
+      const targetDate = datedDays.find((day) => day >= today)
+        ?? datedDays[datedDays.length - 1]
+        ?? TBC_DAY_KEY;
       setSelectedDate(targetDate);
     }
   }, [sortedDays, selectedDate]);

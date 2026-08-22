@@ -7,7 +7,14 @@ import { AlertCircle, ChevronLeft, ChevronRight, MapPin, Clock, Zap } from 'luci
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import { Select } from '@/components/ui/Select';
 import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner';
-import { formatMatchDayKey, formatTime, getDayKey, TBC_DAY_KEY } from '@/utils/format';
+import {
+  compareFixtureDayKeys,
+  compareFixtureSchedule,
+  formatMatchDayKey,
+  formatTime,
+  getDayKey,
+  TBC_DAY_KEY,
+} from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { Match, ApiResponse } from '@/types';
@@ -151,11 +158,7 @@ export default function FixturesClient() {
 
   const matchesByDay = useMemo(() => {
     const map: Record<string, Match[]> = {};
-    [...filteredMatches].sort((a, b) => {
-      if (!a.date) return b.date ? -1 : 0;
-      if (!b.date) return 1;
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
-    }).forEach(m => {
+    [...filteredMatches].sort(compareFixtureSchedule).forEach(m => {
       const key = getDayKey(m.date);
       if (!map[key]) map[key] = [];
       map[key].push(m);
@@ -163,11 +166,10 @@ export default function FixturesClient() {
     return map;
   }, [filteredMatches]);
 
-  const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((left, right) => {
-    if (left === TBC_DAY_KEY) return -1;
-    if (right === TBC_DAY_KEY) return 1;
-    return left.localeCompare(right);
-  }), [matchesByDay]);
+  const sortedDays = useMemo(
+    () => Object.keys(matchesByDay).sort(compareFixtureDayKeys),
+    [matchesByDay],
+  );
 
   // Keep the selected matchday valid as filters and tournaments change.
   useEffect(() => {
@@ -178,9 +180,10 @@ export default function FixturesClient() {
 
     if (!selectedDate || !sortedDays.includes(selectedDate)) {
       const today = getDayKey(new Date().toISOString());
-      const targetDate = sortedDays.includes(TBC_DAY_KEY)
-        ? TBC_DAY_KEY
-        : sortedDays.find(d => d >= today) || sortedDays[sortedDays.length - 1];
+      const datedDays = sortedDays.filter((day) => day !== TBC_DAY_KEY);
+      const targetDate = datedDays.find((day) => day >= today)
+        ?? datedDays[datedDays.length - 1]
+        ?? TBC_DAY_KEY;
       setSelectedDate(targetDate);
     }
   }, [sortedDays, selectedDate]);
