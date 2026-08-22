@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
@@ -54,9 +54,48 @@ const SETTINGS_TABS: Array<{
   { id: 'sponsors', label: 'Sponsors', icon: Trophy, color: 'text-emerald-500' },
   { id: 'faq', label: 'FAQs', icon: HelpCircle, color: 'text-purple-500' },
 ];
+const SETTINGS_TAB_IDS = SETTINGS_TABS.map((tab) => tab.id);
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function handleTabListKeyDown(
+  event: KeyboardEvent<HTMLButtonElement>,
+  currentTab: SettingsTab,
+  activateTab: (tab: SettingsTab) => void,
+) {
+  const currentIndex = SETTINGS_TAB_IDS.indexOf(currentTab);
+  if (currentIndex < 0 || SETTINGS_TAB_IDS.length === 0) return;
+
+  let nextIndex: number;
+  switch (event.key) {
+    case 'ArrowLeft':
+      nextIndex = (currentIndex - 1 + SETTINGS_TAB_IDS.length) % SETTINGS_TAB_IDS.length;
+      break;
+    case 'ArrowRight':
+      nextIndex = (currentIndex + 1) % SETTINGS_TAB_IDS.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    case 'End':
+      nextIndex = SETTINGS_TAB_IDS.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  const nextTab = SETTINGS_TAB_IDS[nextIndex];
+  if (nextTab === undefined) return;
+
+  event.preventDefault();
+  activateTab(nextTab);
+  event.currentTarget
+    .closest('[role="tablist"]')
+    ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    .item(nextIndex)
+    .focus();
 }
 
 export default function SettingsPage() {
@@ -290,7 +329,9 @@ export default function SettingsPage() {
             aria-controls={`settings-panel-${tab.id}`}
             aria-selected={activeTab === tab.id}
             aria-label={tab.label}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(event) => handleTabListKeyDown(event, tab.id, setActiveTab)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 md:py-4 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
               activeTab === tab.id 
                 ? 'bg-blue-600 text-white shadow-lg' 

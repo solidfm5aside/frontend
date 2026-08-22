@@ -5,7 +5,8 @@ import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 import { AlertCircle, ChevronLeft, ChevronRight, MapPin, Clock, Zap } from 'lucide-react';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
-import { FullPageSpinner } from '@/components/ui/Spinner';
+import { Select } from '@/components/ui/Select';
+import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner';
 import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
@@ -44,6 +45,8 @@ export default function FixturesClient() {
   const [activeStage, setActiveStage] = useState<string>('all');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tournamentRequestKey, setTournamentRequestKey] = useState(0);
+  const backgroundRefreshQueued = useRef(false);
+  const foregroundRequestPending = useRef(false);
   const requestSequence = useRef(0);
   const socket = useSocket();
   const activeTournament = useMemo(
@@ -73,6 +76,7 @@ export default function FixturesClient() {
         const preferredTournament = chooseTournament(response.data, ['upcoming', 'completed']);
         setTournaments(response.data);
         setSelectedTournamentId(preferredTournament?._id ?? '');
+        foregroundRequestPending.current = Boolean(preferredTournament);
         if (!preferredTournament) setIsLoading(false);
       } catch (error: unknown) {
         if (cancelled) return;
@@ -89,8 +93,15 @@ export default function FixturesClient() {
 
   const fetchMatches = useCallback(async (silent = false) => {
     if (!selectedTournamentId) return;
+    if (silent && foregroundRequestPending.current) {
+      backgroundRefreshQueued.current = true;
+      return;
+    }
     const requestId = ++requestSequence.current;
-    if (!silent) setIsLoading(true);
+    if (!silent) {
+      foregroundRequestPending.current = true;
+      setIsLoading(true);
+    }
     if (!silent) setLoadError(null);
     try {
       const params = new URLSearchParams({ tournamentId: selectedTournamentId });
@@ -98,6 +109,7 @@ export default function FixturesClient() {
       if (!response.success) throw new Error(response.message || 'Fixtures could not be loaded');
       if (requestId === requestSequence.current) {
         setMatches(response.data);
+        setLoadError(null);
       }
     } catch (error: unknown) {
       console.warn('Fixtures are temporarily unavailable:', error);
@@ -106,7 +118,14 @@ export default function FixturesClient() {
         setLoadError(error instanceof Error ? error.message : 'Failed to load fixtures');
       }
     } finally {
-      if (!silent && requestId === requestSequence.current) setIsLoading(false);
+      if (!silent && requestId === requestSequence.current) {
+        foregroundRequestPending.current = false;
+        setIsLoading(false);
+        if (backgroundRefreshQueued.current) {
+          backgroundRefreshQueued.current = false;
+          queueMicrotask(() => void fetchMatches(true));
+        }
+      }
     }
   }, [selectedTournamentId]);
 
@@ -162,7 +181,7 @@ export default function FixturesClient() {
 
   useRevealOnScroll([matches, selectedDate, isLoading, activeStage, selectedTournamentId]);
 
-  if (isLoading) return <FullPageSpinner />;
+  if (isLoading && tournaments.length === 0 && !loadError) return <FullPageSpinner />;
 
   return (
     <div className="flex flex-col bg-black font-outfit text-white min-h-screen">
@@ -177,11 +196,14 @@ export default function FixturesClient() {
                <label htmlFor="fixtures-tournament" className="mb-2 block text-[9px] font-black uppercase tracking-widest text-neutral-500">
                  Competition
                </label>
-               <select
+               <Select
                  id="fixtures-tournament"
+                 surface="neutral"
+                 aria-busy={isLoading}
                  value={selectedTournamentId}
                  onChange={(event) => {
                    requestSequence.current += 1;
+                   foregroundRequestPending.current = true;
                    setSelectedTournamentId(event.target.value);
                    setMatches([]);
                    setSelectedDate(null);
@@ -189,14 +211,13 @@ export default function FixturesClient() {
                    setLoadError(null);
                    setIsLoading(true);
                  }}
-                 className="w-full rounded-2xl border border-white/10 bg-neutral-950 px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-500 [color-scheme:dark]"
                >
                  {tournaments.map((tournament) => (
                    <option key={tournament._id} value={tournament._id}>
                      {tournamentLabel(tournament)}
                    </option>
                  ))}
-               </select>
+               </Select>
              </div>
            ) : null}
            
@@ -223,7 +244,9 @@ export default function FixturesClient() {
 
       <section className="py-12 md:py-24 px-4 md:px-6">
         <div className="container mx-auto max-w-5xl">
-          {loadError ? (
+          {isLoading ? (
+            <PageSpinner />
+          ) : loadError ? (
             <div className="py-24 text-center rounded-[40px] border border-red-500/20 bg-red-500/5 reveal-on-scroll" role="alert">
               <AlertCircle className="mx-auto mb-5 h-8 w-8 text-red-400" />
               <p className="text-xs font-black text-red-200 uppercase tracking-[0.25em]">{loadError}</p>

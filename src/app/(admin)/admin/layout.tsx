@@ -223,7 +223,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <button
           type="button"
           aria-label="Close admin navigation"
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
@@ -235,8 +235,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         role={isSidebarOpen ? 'dialog' : undefined}
         aria-modal={isSidebarOpen ? true : undefined}
         aria-label="Admin navigation"
-        className={`fixed left-0 top-0 z-50 h-dvh w-64 max-w-[calc(100vw-2rem)] border-r border-white/5 bg-black/40 backdrop-blur-3xl transition-transform duration-300 lg:static lg:translate-x-0 ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed left-0 top-0 z-[60] h-dvh w-64 max-w-[calc(100vw-2rem)] border-r border-white/5 bg-black/40 backdrop-blur-3xl transition-[transform,visibility] duration-300 lg:static lg:visible lg:translate-x-0 ${
+        isSidebarOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'
       }`}
       >
         <div className="flex h-dvh flex-col overflow-hidden">

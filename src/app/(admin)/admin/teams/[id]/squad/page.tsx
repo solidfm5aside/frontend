@@ -7,7 +7,6 @@ import { ChangeEvent, FormEvent, use, useCallback, useEffect, useRef, useState }
 import clsx from 'clsx';
 import {
   ArrowLeft,
-  ChevronDown,
   ImagePlus,
   LoaderCircle,
   Pencil,
@@ -20,6 +19,7 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
 import { isOptimizableImageUrl } from '@/lib/image-url';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { Select } from '@/components/ui/Select';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 type PlayerPosition = 'GK' | 'DF' | 'MF' | 'FW';
@@ -536,24 +536,22 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                 <label htmlFor="destination-team" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
                   Squad Assignment *
                 </label>
-                <div className="group relative">
-                  <select
-                    id="destination-team"
-                    required
-                    value={destinationTeamId}
-                    onChange={(event) => setDestinationTeamId(event.target.value)}
-                    aria-describedby="destination-team-help"
-                    className="relative z-10 w-full appearance-none rounded-2xl border border-white/5 bg-white/5 px-5 py-4 pr-12 text-sm text-white outline-none transition-all focus:border-blue-500/50"
-                    style={{ colorScheme: 'dark' }}
-                  >
-                    {availableTeams.map((availableTeam) => (
-                      <option key={availableTeam._id} value={availableTeam._id} className="bg-[#0a0a0a] text-white">
-                        {availableTeam.name}{availableTeam._id === id ? ' — Current squad' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-5 top-1/2 z-20 h-4 w-4 -translate-y-1/2 text-neutral-500 transition-colors group-focus-within:text-blue-500" />
-                </div>
+                <Select
+                  id="destination-team"
+                  required
+                  controlSize="large"
+                  fontWeight="normal"
+                  surface="glass"
+                  value={destinationTeamId}
+                  onChange={(event) => setDestinationTeamId(event.target.value)}
+                  aria-describedby="destination-team-help"
+                >
+                  {availableTeams.map((availableTeam) => (
+                    <option key={availableTeam._id} value={availableTeam._id}>
+                      {availableTeam.name}{availableTeam._id === id ? ' — Current squad' : ''}
+                    </option>
+                  ))}
+                </Select>
                 <p id="destination-team-help" className="text-[9px] font-bold uppercase leading-relaxed tracking-widest text-neutral-600">
                   Choose another team to transfer this player. Destination roster and tournament locks are checked when you save.
                 </p>
@@ -568,25 +566,23 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
               <div className="space-y-2">
                 <label htmlFor="player-position" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Position *</label>
-                <div className="group relative">
-                  <select
-                    id="player-position"
-                    required
-                    className="relative z-10 w-full appearance-none rounded-2xl border border-white/5 bg-white/5 px-5 py-4 pr-12 text-sm text-white outline-none transition-all focus:border-blue-500/50"
-                    style={{ colorScheme: 'dark' }}
-                    value={formData.position}
-                    onChange={(event) => setFormData((current) => ({
-                      ...current,
-                      position: event.target.value as PlayerPosition,
-                    }))}
-                  >
-                    <option value="GK" className="bg-[#0a0a0a] text-white">Goalkeeper (GK)</option>
-                    <option value="DF" className="bg-[#0a0a0a] text-white">Defender (DF)</option>
-                    <option value="MF" className="bg-[#0a0a0a] text-white">Midfielder (MF)</option>
-                    <option value="FW" className="bg-[#0a0a0a] text-white">Forward (FW)</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-5 top-1/2 z-20 h-4 w-4 -translate-y-1/2 text-neutral-500 transition-colors group-focus-within:text-blue-500" />
-                </div>
+                <Select
+                  id="player-position"
+                  required
+                  controlSize="large"
+                  fontWeight="normal"
+                  surface="glass"
+                  value={formData.position}
+                  onChange={(event) => setFormData((current) => ({
+                    ...current,
+                    position: event.target.value as PlayerPosition,
+                  }))}
+                >
+                  <option value="GK">Goalkeeper (GK)</option>
+                  <option value="DF">Defender (DF)</option>
+                  <option value="MF">Midfielder (MF)</option>
+                  <option value="FW">Forward (FW)</option>
+                </Select>
               </div>
 
               <div className="space-y-2">

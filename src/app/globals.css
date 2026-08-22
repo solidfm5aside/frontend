@@ -26,9 +26,31 @@
     overflow-x: clip;
   }
 
-  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  :where(a, button, input, select, summary, textarea, [tabindex]):focus-visible {
     outline: 2px solid var(--accent-blue);
     outline-offset: 3px;
+  }
+
+  .app-select[data-option-surface='solid'] option,
+  .app-select[data-option-surface='solid'] optgroup {
+    background-color: #07131a;
+    color: #f5f5f5;
+  }
+
+  .app-select[data-option-surface='black'] option,
+  .app-select[data-option-surface='black'] optgroup {
+    background-color: #000;
+    color: #f5f5f5;
+  }
+
+  .app-select[data-option-surface='neutral'] option,
+  .app-select[data-option-surface='neutral'] optgroup {
+    background-color: #0a0a0a;
+    color: #f5f5f5;
+  }
+
+  .app-select option:disabled {
+    color: #737373;
   }
 }
 

@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
 import { isAxiosError } from 'axios';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
@@ -15,6 +21,74 @@ const KNOCKOUT_STAGES = new Set([
   'final',
   'third_place',
 ]);
+
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+  '[contenteditable="true"]',
+].join(',');
+
+function getFocusableElements(container: HTMLElement) {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) =>
+      element.getAttribute('aria-hidden') !== 'true' &&
+      (element.offsetWidth > 0 || element.offsetHeight > 0 || element.getClientRects().length > 0),
+  );
+}
+
+function focusDialog(container: HTMLElement | null, preferAutofocus = false) {
+  if (!container) return;
+  const autofocusTarget = preferAutofocus
+    ? container.querySelector<HTMLElement>('[data-dialog-autofocus="true"]')
+    : null;
+  (autofocusTarget || container).focus({ preventScroll: true });
+}
+
+function restoreDialogFocus(target: HTMLElement | null, fallback: HTMLElement | null) {
+  const isValidTarget = (element: HTMLElement | null) => Boolean(
+    element?.isConnected &&
+    element !== document.body &&
+    element !== document.documentElement &&
+    !element.matches(':disabled') &&
+    element.getClientRects().length > 0,
+  );
+  const focusTarget = isValidTarget(target) ? target : isValidTarget(fallback) ? fallback : null;
+  focusTarget?.focus({ preventScroll: true });
+}
+
+function scheduleDialogFocusRestore(target: HTMLElement | null, fallback: HTMLElement | null) {
+  window.requestAnimationFrame(() => restoreDialogFocus(target, fallback));
+}
+
+function trapDialogFocus(event: ReactKeyboardEvent<HTMLElement>, dialog: HTMLElement) {
+  if (event.key !== 'Tab') return;
+
+  const focusableElements = getFocusableElements(dialog);
+  if (focusableElements.length === 0) {
+    event.preventDefault();
+    dialog.focus({ preventScroll: true });
+    return;
+  }
+
+  const firstElement = focusableElements[0];
+  const lastElement = focusableElements[focusableElements.length - 1];
+  const activeElement = document.activeElement;
+
+  if (!dialog.contains(activeElement) || activeElement === dialog) {
+    event.preventDefault();
+    (event.shiftKey ? lastElement : firstElement).focus({ preventScroll: true });
+  } else if (event.shiftKey && activeElement === firstElement) {
+    event.preventDefault();
+    lastElement.focus({ preventScroll: true });
+  } else if (!event.shiftKey && activeElement === lastElement) {
+    event.preventDefault();
+    firstElement.focus({ preventScroll: true });
+  }
+}
 
 
 
@@ -78,6 +152,11 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   // Track in-flight requests to prevent double-submit (useRef persists across renders)
   const pendingRef = useRef(false);
   const pendingGoalRef = useRef(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const assistDialogRef = useRef<HTMLDivElement>(null);
+  const knockoutDialogRef = useRef<HTMLDivElement>(null);
+  const penaltyDialogRef = useRef<HTMLDivElement>(null);
+  const isAssistOpen = Boolean(pendingGoalScorer);
 
   const fetchPlayers = useCallback(async (
     teamId: string,
@@ -148,6 +227,32 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   useEffect(() => {
     void fetchMatchDetails();
   }, [fetchMatchDetails]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const currentPaddingRight = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+      restoreDialogFocus(previouslyFocused, null);
+    };
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => focusDialog(dialogRef.current));
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoading, match?._id]);
 
   // --- OPTIMISTIC EVENT ADD (MAIN GRID) ---
   const handleAddEvent = async (playerId: string, teamId: string) => {
@@ -403,14 +508,99 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
     }
   }
 
+  useEffect(() => {
+    if (!isAssistOpen) return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const fallbackDialog = knockoutDialogRef.current ?? dialogRef.current;
+    const frame = window.requestAnimationFrame(() => focusDialog(assistDialogRef.current, true));
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scheduleDialogFocusRestore(previouslyFocused, fallbackDialog);
+    };
+  }, [isAssistOpen]);
+
+  useEffect(() => {
+    if (!showKnockoutResolve) return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const fallbackDialog = dialogRef.current;
+    const frame = window.requestAnimationFrame(() => focusDialog(knockoutDialogRef.current, true));
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scheduleDialogFocusRestore(previouslyFocused, fallbackDialog);
+    };
+  }, [showKnockoutResolve]);
+
+  useEffect(() => {
+    if (!showPenaltyPanel) return;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const fallbackDialog = dialogRef.current;
+    const frame = window.requestAnimationFrame(() => focusDialog(penaltyDialogRef.current, true));
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      scheduleDialogFocusRestore(previouslyFocused, fallbackDialog);
+    };
+  }, [showPenaltyPanel]);
+
+  const handleDialogKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const activeDialog = showPenaltyPanel
+      ? penaltyDialogRef.current
+      : showKnockoutResolve
+        ? knockoutDialogRef.current
+        : isAssistOpen
+          ? assistDialogRef.current
+          : dialogRef.current;
+
+    if (!activeDialog) return;
+
+    if (event.key === 'Tab') {
+      trapDialogFocus(event, activeDialog);
+      return;
+    }
+
+    if (event.key !== 'Escape') return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isStatusUpdating || (isEventUpdating && !isAssistOpen)) return;
+
+    if (showPenaltyPanel) {
+      setShowPenaltyPanel(false);
+      setShowKnockoutResolve(true);
+    } else if (showKnockoutResolve) {
+      setShowKnockoutResolve(false);
+    } else if (isAssistOpen) {
+      if (!isEventUpdating && pendingGoalInfo) void handleDeleteEvent(pendingGoalInfo.tempId);
+    } else {
+      onClose();
+    }
+  };
+
   if (isLoading || !match) {
     return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 font-outfit backdrop-blur-xl">
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 font-outfit backdrop-blur-xl"
+        onKeyDown={handleDialogKeyDown}
+      >
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="match-console-state-title"
           aria-busy={isLoading}
+          tabIndex={-1}
           className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#0a0a0a] p-7 text-center shadow-2xl"
         >
           <h2 id="match-console-state-title" className="text-xl font-black uppercase italic tracking-tight text-white">
@@ -447,8 +637,19 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   const canLogEvents = matchStatus === 'live' || matchStatus === 'completed';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 backdrop-blur-xl bg-black/80 font-outfit">
-      <div className="w-full max-w-6xl h-[98vh] sm:h-[90vh] bg-[#0a0a0a] border border-white/10 rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_0_100px_rgba(37,99,235,0.1)] animate-in fade-in zoom-in duration-200 flex flex-col relative">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 backdrop-blur-xl bg-black/80 font-outfit"
+      onKeyDown={handleDialogKeyDown}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="match-console-title"
+        aria-busy={isStatusUpdating || isEventUpdating}
+        tabIndex={-1}
+        className="w-full max-w-6xl h-[98vh] sm:h-[90vh] bg-[#0a0a0a] border border-white/10 rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_0_100px_rgba(37,99,235,0.1)] animate-in fade-in zoom-in duration-200 flex flex-col relative"
+      >
         
         {/* Glow Effects */}
         <div className={`absolute top-0 left-0 w-full h-1 transition-colors duration-500 ${
@@ -462,7 +663,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                 <Trophy className="h-4 w-4 sm:h-6 sm:w-6 text-blue-500" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm sm:text-2xl font-black italic uppercase tracking-tighter text-white truncate">Match Console</h2>
+                <h2 id="match-console-title" className="text-sm sm:text-2xl font-black italic uppercase tracking-tighter text-white truncate">Match Console</h2>
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full ${matchStatus === 'live' ? 'bg-red-500 animate-pulse' : 'bg-neutral-600'}`}></span>
                   <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-neutral-500 truncate">
@@ -536,7 +737,13 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                   </button>
                 )}
               </div>
-              <button type="button" onClick={onClose} aria-label="Close match console" className="h-8 w-8 sm:h-11 sm:w-11 rounded-full bg-white/5 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 shrink-0">
+              <button
+                type="button"
+                disabled={isAssistOpen || isStatusUpdating || isEventUpdating}
+                onClick={onClose}
+                aria-label={isAssistOpen ? 'Finish choosing an assist before closing the match console' : 'Close match console'}
+                className="h-8 w-8 sm:h-11 sm:w-11 rounded-full bg-white/5 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 shrink-0 disabled:cursor-not-allowed disabled:opacity-30"
+              >
                 <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
            </div>
@@ -548,20 +755,26 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
            {/* Mobile Tab Toggle (Persistent) */}
            <div className="flex md:hidden p-1 bg-white/5 border-b border-white/5 shrink-0">
               <button 
+                type="button"
+                disabled={isAssistOpen}
                 onClick={() => setActiveTeamTab('home')} 
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${activeTeamTab === 'home' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'home' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
               >
                 HOME
               </button>
               <button 
+                type="button"
+                disabled={isAssistOpen}
                 onClick={() => setActiveTeamTab('away')} 
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${activeTeamTab === 'away' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'away' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
               >
                 AWAY
               </button>
               <button 
+                type="button"
+                disabled={isAssistOpen}
                 onClick={() => setActiveTeamTab('timeline')} 
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${activeTeamTab === 'timeline' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
+                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'timeline' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
               >
                  LOG
               </button>
@@ -652,7 +865,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      {lastLoggedEventId && (
                        <button 
                          type="button"
-                         disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating}
+                         disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo)}
                          onClick={() => void handleDeleteEvent(lastLoggedEventId)}
                          className="flex flex-col items-center gap-1 group disabled:opacity-40"
                        >
@@ -672,13 +885,41 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                 {/* Assist Overlay */}
                 {pendingGoalScorer && (
                   <div className="absolute inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom duration-300">
-                     <div className="mx-auto max-w-2xl bg-blue-600 rounded-t-[24px] sm:rounded-t-[32px] p-4 sm:p-6 shadow-2xl border-x border-t border-white/20">
+                     <div
+                       ref={assistDialogRef}
+                       role="dialog"
+                       aria-modal="true"
+                       aria-labelledby="assist-dialog-title"
+                       aria-describedby="assist-dialog-description"
+                       aria-busy={isEventUpdating}
+                       tabIndex={-1}
+                       className="mx-auto max-w-2xl bg-blue-600 rounded-t-[24px] sm:rounded-t-[32px] p-4 sm:p-6 shadow-2xl border-x border-t border-white/20"
+                     >
                         <div className="flex items-center justify-between mb-4 sm:mb-6">
                            <div>
-                             <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest">Goal Logged!</p>
-                             <h4 className="text-sm sm:text-xl font-black text-white italic uppercase tracking-tighter">Who provided the assist?</h4>
+                             <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest">Goal pending</p>
+                              <h4 id="assist-dialog-title" className="text-sm sm:text-xl font-black text-white italic uppercase tracking-tighter">Who provided the assist?</h4>
+                              <p id="assist-dialog-description" className="sr-only">Choose an assisting player, record no assist, or cancel this pending goal.</p>
                            </div>
-                           <button type="button" disabled={isEventUpdating} onClick={() => void handleFinalizeGoal()} className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40">Skip</button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                data-dialog-autofocus="true"
+                                disabled={isEventUpdating}
+                                onClick={() => pendingGoalInfo && void handleDeleteEvent(pendingGoalInfo.tempId)}
+                                className="px-3 py-1.5 rounded-lg border border-white/20 text-blue-100 text-[9px] font-black uppercase tracking-widest hover:bg-black/10 disabled:opacity-40"
+                              >
+                                Cancel goal
+                              </button>
+                            <button
+                              type="button"
+                              disabled={isEventUpdating}
+                              onClick={() => void handleFinalizeGoal()}
+                              className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40"
+                            >
+                              Skip
+                            </button>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                            {(homePlayers.some(p => p._id === pendingGoalScorer?._id) ? homePlayers : awayPlayers)
@@ -710,9 +951,10 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       <input 
                          type="text" 
                          placeholder="Filter roster..." 
+                         disabled={isAssistOpen}
                          value={homeSearch}
                          onChange={(e) => setHomeSearch(e.target.value)}
-                         className="w-full h-8 sm:h-10 bg-black/40 border border-white/10 rounded-lg sm:rounded-xl px-3 text-[10px] sm:text-xs text-white focus:outline-none focus:border-blue-500"
+                         className="w-full h-8 sm:h-10 bg-black/40 border border-white/10 rounded-lg sm:rounded-xl px-3 text-[10px] sm:text-xs text-white focus:outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
                       />
                    </div>
                    <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 auto-rows-max">
@@ -749,9 +991,10 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       <input 
                          type="text" 
                          placeholder="Filter roster..." 
+                         disabled={isAssistOpen}
                          value={awaySearch}
                          onChange={(e) => setAwaySearch(e.target.value)}
-                         className="w-full h-8 sm:h-10 bg-black/40 border border-white/10 rounded-lg sm:rounded-xl px-3 text-[10px] sm:text-xs text-white focus:outline-none focus:border-red-500"
+                         className="w-full h-8 sm:h-10 bg-black/40 border border-white/10 rounded-lg sm:rounded-xl px-3 text-[10px] sm:text-xs text-white focus:outline-none focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-40"
                       />
                    </div>
                    <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 auto-rows-max">
@@ -860,18 +1103,28 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         {/* KNOCKOUT RESOLVE DIALOG */}
         {showKnockoutResolve && (
           <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-             <div className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+             <div
+               ref={knockoutDialogRef}
+               role="dialog"
+               aria-modal="true"
+               aria-labelledby="knockout-resolution-title"
+               aria-describedby="knockout-resolution-score"
+               aria-busy={isStatusUpdating}
+               tabIndex={-1}
+               className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200"
+             >
                 <div className="text-center mb-6 sm:mb-8">
                    <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
                       <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
                    </div>
-                   <h3 className="text-xl sm:text-2xl font-black italic tracking-tighter text-white uppercase">Match Level</h3>
-                   <p className="text-[9px] sm:text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-2">{match.homeTeam.name} {homeScore} - {awayScore} {match.awayTeam.name}</p>
+                   <h3 id="knockout-resolution-title" className="text-xl sm:text-2xl font-black italic tracking-tighter text-white uppercase">Match Level</h3>
+                   <p id="knockout-resolution-score" className="text-[9px] sm:text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-2">{match.homeTeam.name} {homeScore} - {awayScore} {match.awayTeam.name}</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:gap-4">
                    <button 
                      type="button"
+                     data-dialog-autofocus="true"
                      onClick={() => { setIsExtraTime(true); setShowKnockoutResolve(false); }}
                      className="w-full p-4 sm:p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/40 hover:bg-blue-600/5 transition-all text-left flex items-center justify-between group"
                    >
@@ -909,12 +1162,20 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         {/* PENALTY SHOOTOUT PANEL */}
         {showPenaltyPanel && (
           <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-             <div className="w-full max-w-xl bg-black border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(245,158,11,0.2)] animate-in slide-in-from-bottom-8 duration-300">
+             <div
+               ref={penaltyDialogRef}
+               role="dialog"
+               aria-modal="true"
+               aria-labelledby="penalty-shootout-title"
+               aria-busy={isStatusUpdating}
+               tabIndex={-1}
+               className="w-full max-w-xl bg-black border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(245,158,11,0.2)] animate-in slide-in-from-bottom-8 duration-300"
+             >
                 <div className="text-center mb-8 sm:mb-12">
                    <div className="inline-flex px-3 sm:px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-4">
                       Goalmouth Showdown
                    </div>
-                   <h3 className="text-2xl sm:text-4xl font-black italic tracking-tighter text-white uppercase">Penalty Shootout</h3>
+                   <h3 id="penalty-shootout-title" className="text-2xl sm:text-4xl font-black italic tracking-tighter text-white uppercase">Penalty Shootout</h3>
                 </div>
 
                 <div className="flex items-center justify-between gap-4 sm:gap-8 mb-8 sm:mb-12">
@@ -925,10 +1186,12 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         type="number" 
                         min={0}
                         inputMode="numeric"
+                        data-dialog-autofocus="true"
+                        disabled={isStatusUpdating}
                         aria-label={`${match.homeTeam.name} penalty shootout score`}
                         value={shootoutScore.home}
                         onChange={(e) => setShootoutScore({ ...shootoutScore, home: parseInt(e.target.value) || 0 })}
-                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all"
+                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all disabled:cursor-wait disabled:opacity-50"
                       />
                    </div>
 
@@ -941,10 +1204,11 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         type="number" 
                         min={0}
                         inputMode="numeric"
+                        disabled={isStatusUpdating}
                         aria-label={`${match.awayTeam.name} penalty shootout score`}
                         value={shootoutScore.away}
                         onChange={(e) => setShootoutScore({ ...shootoutScore, away: parseInt(e.target.value) || 0 })}
-                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all font-outfit"
+                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all font-outfit disabled:cursor-wait disabled:opacity-50"
                       />
                    </div>
                 </div>
@@ -952,6 +1216,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                    <button 
                       type="button"
+                      disabled={isStatusUpdating}
                       onClick={() => {
                         if (shootoutScore.home === shootoutScore.away) {
                           toast.error('Shootout cannot end in a draw!');
@@ -960,14 +1225,18 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         const winnerId = shootoutScore.home > shootoutScore.away ? match.homeTeam._id : match.awayTeam._id;
                         handleSetWinner(winnerId, shootoutScore);
                       }}
-                      className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-amber-500 text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-amber-400 active:scale-95 transition-all shadow-xl shadow-amber-500/20"
+                      className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-amber-500 text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-amber-400 active:scale-95 transition-all shadow-xl shadow-amber-500/20 disabled:cursor-wait disabled:opacity-50"
                    >
                       Confirm Winner
                    </button>
                    <button 
                       type="button"
-                      onClick={() => setShowPenaltyPanel(false)}
-                      className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-neutral-400 text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+                      disabled={isStatusUpdating}
+                      onClick={() => {
+                        setShowPenaltyPanel(false);
+                        setShowKnockoutResolve(true);
+                      }}
+                      className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-neutral-400 text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:cursor-wait disabled:opacity-50"
                    >
                       Back
                    </button>

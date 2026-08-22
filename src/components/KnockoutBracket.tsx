@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { Clock, Trophy, Zap } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 
@@ -157,6 +157,45 @@ function getInitialStage(bracket: BracketData) {
     bracket[stage].some((match) => match.status !== 'pending' || Boolean(match.date)),
   );
   return latestMaterializedStage ?? stages[0] ?? '';
+}
+
+function handleTabListKeyDown(
+  event: KeyboardEvent<HTMLButtonElement>,
+  stages: readonly string[],
+  currentStage: string,
+  activateStage: (stage: string) => void,
+) {
+  const currentIndex = stages.indexOf(currentStage);
+  if (currentIndex < 0 || stages.length === 0) return;
+
+  let nextIndex: number;
+  switch (event.key) {
+    case 'ArrowLeft':
+      nextIndex = (currentIndex - 1 + stages.length) % stages.length;
+      break;
+    case 'ArrowRight':
+      nextIndex = (currentIndex + 1) % stages.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    case 'End':
+      nextIndex = stages.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  const nextStage = stages[nextIndex];
+  if (nextStage === undefined) return;
+
+  event.preventDefault();
+  activateStage(nextStage);
+  event.currentTarget
+    .closest('[role="tablist"]')
+    ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    .item(nextIndex)
+    .focus();
 }
 
 function getWinnerId(winner: BracketMatch['winner']) {
@@ -329,7 +368,9 @@ export default function KnockoutBracket({ tournamentId, filterStage }: KnockoutB
                 role="tab"
                 aria-selected={isActive}
                 aria-controls="bracket-stage-panel"
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveTab(stage)}
+                onKeyDown={(event) => handleTabListKeyDown(event, stages, stage, setActiveTab)}
                 className={`min-h-11 shrink-0 rounded-2xl border px-5 py-3 text-[10px] font-black uppercase tracking-[0.2em] transition-all sm:px-6 ${
                   isActive
                     ? 'border-blue-400 bg-blue-600 text-white shadow-xl shadow-blue-600/20'

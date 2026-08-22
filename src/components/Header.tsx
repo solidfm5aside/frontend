@@ -25,19 +25,30 @@ function isNavLinkActive(href: string, pathname: string, activeHash: string) {
 }
 
 export default function Header() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeHash, setActiveHash] = useState('');
+  const [menuPathname, setMenuPathname] = useState<string | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const [renderedPathname, setRenderedPathname] = useState(pathname);
+
+  if (pathname !== renderedPathname) {
+    setRenderedPathname(pathname);
+    if (menuPathname !== null) setMenuPathname(null);
+  }
+
+  const isMenuOpen = menuPathname === pathname;
 
   useEffect(() => {
     const handleScroll = () => {
       const nextValue = window.scrollY > 10;
       setIsScrolled((currentValue) => currentValue === nextValue ? currentValue : nextValue);
     };
-    const handleHashChange = () => setActiveHash(window.location.hash);
+    const handleHashChange = () => {
+      setActiveHash(window.location.hash);
+      setMenuPathname(null);
+    };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('hashchange', handleHashChange);
@@ -67,12 +78,12 @@ export default function Header() {
     const desktopQuery = window.matchMedia('(min-width: 1280px)');
 
     const closeAtDesktop = (event: MediaQueryListEvent) => {
-      if (event.matches) setIsMenuOpen(false);
+      if (event.matches) setMenuPathname(null);
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        setIsMenuOpen(false);
+        setMenuPathname(null);
         return;
       }
 
@@ -110,16 +121,21 @@ export default function Header() {
     };
   }, [isMenuOpen]);
 
-  const closeMenu = () => setIsMenuOpen(false);
-  const toggleMenu = () => setIsMenuOpen((isOpen) => !isOpen);
+  const closeMenu = () => setMenuPathname(null);
+  const toggleMenu = () => setMenuPathname((openPathname) => openPathname === pathname ? null : pathname);
 
   return (
     <header className={`sticky top-0 z-50 w-full transition-all duration-300 ${isScrolled || isMenuOpen ? 'border-b border-white/10 bg-black py-3' : 'bg-transparent py-6'}`}>
       <div className="container mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link
           href="/"
+          aria-hidden={isMenuOpen ? true : undefined}
+          tabIndex={isMenuOpen ? -1 : undefined}
           className="group flex min-h-11 shrink-0 items-center gap-2.5 sm:gap-3"
-          onClick={() => setActiveHash('')}
+          onClick={() => {
+            closeMenu();
+            setActiveHash('');
+          }}
           aria-label="Solid FM 5-Aside home"
         >
           <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-[#FFD700] shadow-lg shadow-yellow-500/20 transition-transform group-hover:scale-110 motion-reduce:transform-none sm:h-12 sm:w-12">
@@ -162,6 +178,9 @@ export default function Header() {
         <div className="flex items-center gap-3 sm:gap-4">
           <Link
             href="/register-team"
+            aria-hidden={isMenuOpen ? true : undefined}
+            tabIndex={isMenuOpen ? -1 : undefined}
+            onClick={closeMenu}
             className="hidden rounded-2xl bg-[#FFD700] px-5 py-3 text-[10px] font-black uppercase tracking-widest text-black shadow-xl shadow-yellow-600/20 transition-all hover:scale-105 hover:bg-white active:scale-95 motion-reduce:transform-none sm:inline-flex 2xl:px-7 2xl:text-[11px]"
           >
             Register Now

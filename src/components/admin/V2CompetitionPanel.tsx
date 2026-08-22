@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
+import { Select } from '@/components/ui/Select';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 import {
   CompetitionDraw,
@@ -245,9 +246,19 @@ function StepCard({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const normalizedDefaultOpen = Boolean(defaultOpen);
+  const [isOpen, setIsOpen] = useState(normalizedDefaultOpen);
+  const [previousDefaultOpen, setPreviousDefaultOpen] = useState(normalizedDefaultOpen);
+
+  if (normalizedDefaultOpen !== previousDefaultOpen) {
+    setPreviousDefaultOpen(normalizedDefaultOpen);
+    if (normalizedDefaultOpen && !isOpen) setIsOpen(true);
+  }
+
   return (
     <details
-      open={defaultOpen}
+      open={isOpen}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
       className="group rounded-[26px] border border-white/5 bg-white/[0.02] backdrop-blur-3xl"
     >
       <summary className="flex cursor-pointer list-none items-center gap-4 p-5 sm:p-6 [&::-webkit-details-marker]:hidden">
@@ -393,10 +404,10 @@ function CommitteeTieResolutionCard({
       <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
         <div className="space-y-2">
           <label htmlFor={`tie-method-${tie.basisHash}`} className={labelClassName}>Decision method</label>
-          <select id={`tie-method-${tie.basisHash}`} required value={method} disabled={!canManageCompetition || !correctionAllowed || disabled} onChange={(event) => setMethod(event.target.value as '' | CompetitionCommitteeDecisionMethod)} className={inputClassName}>
-            <option value="" className="bg-[#07131a]">Choose method…</option>
-            {Object.entries(COMMITTEE_METHOD_LABELS).map(([value, label]) => <option key={value} value={value} className="bg-[#07131a]">{label}</option>)}
-          </select>
+          <Select id={`tie-method-${tie.basisHash}`} surface="muted" required value={method} disabled={!canManageCompetition || !correctionAllowed || disabled} onChange={(event) => setMethod(event.target.value as '' | CompetitionCommitteeDecisionMethod)}>
+            <option value="">Choose method…</option>
+            {Object.entries(COMMITTEE_METHOD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
         </div>
         <div className="space-y-2">
           <label htmlFor={`tie-note-${tie.basisHash}`} className={labelClassName}>Decision note {method === 'other' ? '(required)' : '(optional)'}</label>
@@ -1206,10 +1217,10 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="min-w-0 flex-1">
               <label htmlFor={`entry-team-${tournamentId}`} className="sr-only">Registered team to enter</label>
-              <select id={`entry-team-${tournamentId}`} value={selectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)} disabled={!allowedActions.editEntries || entries.length >= 14 || Boolean(busyAction)} className={inputClassName}>
-                <option value="" className="bg-[#07131a]">Select a registered team…</option>
-                {availableTeams.map((team) => <option key={team._id} value={team._id} className="bg-[#07131a]">{team.name}{team.city ? ` — ${team.city}` : ''}</option>)}
-              </select>
+              <Select id={`entry-team-${tournamentId}`} surface="muted" value={selectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)} disabled={!allowedActions.editEntries || entries.length >= 14 || Boolean(busyAction)}>
+                <option value="">Select a registered team…</option>
+                {availableTeams.map((team) => <option key={team._id} value={team._id}>{team.name}{team.city ? ` — ${team.city}` : ''}</option>)}
+              </Select>
             </div>
             <button type="button" onClick={() => void handleAddEntry()} disabled={!selectedTeamId || !allowedActions.editEntries || entries.length >= 14 || Boolean(busyAction)} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 text-[10px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
               {busyAction === 'add-entry' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add team
@@ -1245,10 +1256,10 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                     <div key={`${groupKey}-${index}`} className="grid grid-cols-[32px_minmax(0,1fr)_38px] items-center gap-2">
                       <span className="text-center text-[10px] font-black text-blue-400">{index + 1}</span>
                       <label className="sr-only" htmlFor={`group-${groupKey}-${index}-${tournamentId}`}>Group {groupKey} slot {index + 1}</label>
-                      <select id={`group-${groupKey}-${index}-${tournamentId}`} value={entryId} onChange={(event) => assignEntryToGroupSlot(groupKey, index, event.target.value)} className="min-w-0 rounded-xl border border-white/10 bg-[#07131a] px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-blue-500">
+                      <Select id={`group-${groupKey}-${index}-${tournamentId}`} controlSize="compact" value={entryId} onChange={(event) => assignEntryToGroupSlot(groupKey, index, event.target.value)}>
                         <option value="">Choose team…</option>
                         {entries.map((entry) => <option key={entry._id} value={entry._id}>{entry.teamId.name}</option>)}
-                      </select>
+                      </Select>
                       <button type="button" onClick={() => swapGroupSlot(groupKey, index)} aria-label={`Swap group ${groupKey} slot ${index + 1} with group ${groupKey === 'A' ? 'B' : 'A'}`} title={`Swap with Group ${groupKey === 'A' ? 'B' : 'A'} slot ${index + 1}`} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 text-neutral-500 hover:border-blue-500/30 hover:text-blue-400">
                         <ArrowLeftRight className="h-3.5 w-3.5" />
                       </button>

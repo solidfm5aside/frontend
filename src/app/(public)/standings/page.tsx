@@ -1,16 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { AlertCircle, Medal, RefreshCw, User } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
-import { FullPageSpinner } from '@/components/ui/Spinner';
+import { Select } from '@/components/ui/Select';
+import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
 import { ApiResponse, PlayerStats, TeamStanding } from '@/types';
 import { CompetitionGroupKey, GroupedStandings, GroupStandingRow } from '@/types/competition';
 
 type TabType = 'table' | 'statistics';
+
+const STANDINGS_TABS: readonly TabType[] = ['table', 'statistics'];
+const COMPETITION_GROUPS: readonly CompetitionGroupKey[] = ['A', 'B'];
 
 interface PublicTournament {
   _id: string;
@@ -57,6 +61,45 @@ function tabClassName(active: boolean) {
   }`;
 }
 
+function handleTabListKeyDown<T extends string>(
+  event: KeyboardEvent<HTMLButtonElement>,
+  tabs: readonly T[],
+  currentTab: T,
+  activateTab: (tab: T) => void,
+) {
+  const currentIndex = tabs.indexOf(currentTab);
+  if (currentIndex < 0 || tabs.length === 0) return;
+
+  let nextIndex: number;
+  switch (event.key) {
+    case 'ArrowLeft':
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      break;
+    case 'ArrowRight':
+      nextIndex = (currentIndex + 1) % tabs.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    case 'End':
+      nextIndex = tabs.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  const nextTab = tabs[nextIndex];
+  if (nextTab === undefined) return;
+
+  event.preventDefault();
+  activateTab(nextTab);
+  event.currentTarget
+    .closest('[role="tablist"]')
+    ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    .item(nextIndex)
+    .focus();
+}
+
 export default function StandingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('table');
   const [activeGroup, setActiveGroup] = useState<CompetitionGroupKey>('A');
@@ -68,8 +111,9 @@ export default function StandingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadedTournamentId, setLoadedTournamentId] = useState('');
   const [tournamentRequestKey, setTournamentRequestKey] = useState(0);
+  const backgroundRefreshQueued = useRef(false);
+  const foregroundRequestPending = useRef(false);
   const statsRequestSequence = useRef(0);
   const socket = useSocket();
 
@@ -91,8 +135,10 @@ export default function StandingsPage() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
+        const preferredTournament = chooseDefaultTournament(response.data);
         setTournaments(response.data);
-        setSelectedTournamentId(chooseDefaultTournament(response.data)?._id ?? '');
+        setSelectedTournamentId(preferredTournament?._id ?? '');
+        foregroundRequestPending.current = Boolean(preferredTournament);
         if (response.data.length === 0) setIsLoading(false);
       } catch (loadError: unknown) {
         if (cancelled) return;
@@ -111,9 +157,17 @@ export default function StandingsPage() {
 
   const fetchSelectedTournament = useCallback(async (silent = false) => {
     if (!activeTournament) return;
+    if (silent && foregroundRequestPending.current) {
+      backgroundRefreshQueued.current = true;
+      return;
+    }
     const requestSequence = ++statsRequestSequence.current;
     if (silent) setIsRefreshing(true);
-    else setIsLoading(true);
+    else {
+      foregroundRequestPending.current = true;
+      setIsRefreshing(false);
+      setIsLoading(true);
+    }
     if (!silent) setError(null);
 
     try {
@@ -144,15 +198,23 @@ export default function StandingsPage() {
         setGroupedStandings(EMPTY_GROUPS);
       }
       setTopScorers(scorersResponse.data);
+      setError(null);
     } catch (loadError: unknown) {
       if (requestSequence === statsRequestSequence.current && !silent) {
         setError(getErrorMessage(loadError, 'Failed to load tournament standings'));
       }
     } finally {
       if (requestSequence === statsRequestSequence.current) {
-        setLoadedTournamentId(activeTournament._id);
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (silent) {
+          setIsRefreshing(false);
+        } else {
+          foregroundRequestPending.current = false;
+          setIsLoading(false);
+          if (backgroundRefreshQueued.current) {
+            backgroundRefreshQueued.current = false;
+            queueMicrotask(() => void fetchSelectedTournament(true));
+          }
+        }
       }
     }
   }, [activeTournament, isGroupedCompetition]);
@@ -183,7 +245,7 @@ export default function StandingsPage() {
     selectedTournamentId,
   ]);
 
-  if ((isLoading && !activeTournament) || (activeTournament && loadedTournamentId !== activeTournament._id)) {
+  if (isLoading && tournaments.length === 0 && !error) {
     return <FullPageSpinner />;
   }
 
@@ -208,21 +270,26 @@ export default function StandingsPage() {
             {tournaments.length > 0 ? (
               <div className="w-full space-y-2 lg:w-72">
                 <label htmlFor="standings-tournament" className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Competition</label>
-                <select
+                <Select
                   id="standings-tournament"
+                  aria-busy={isLoading}
                   value={selectedTournamentId}
                   onChange={(event) => {
+                    statsRequestSequence.current += 1;
+                    foregroundRequestPending.current = true;
                     setSelectedTournamentId(event.target.value);
                     setActiveGroup('A');
+                    setError(null);
+                    setIsRefreshing(false);
+                    setIsLoading(true);
                   }}
-                  className="w-full rounded-2xl border border-white/10 bg-[#07131a] px-4 py-3 text-sm font-bold text-white outline-none focus:border-blue-500 [color-scheme:dark]"
                 >
                   {tournaments.map((tournament) => (
                     <option key={tournament._id} value={tournament._id}>
                       {tournament.name} — {tournament.season} ({tournament.status})
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             ) : null}
           </div>
@@ -238,7 +305,9 @@ export default function StandingsPage() {
             role="tab"
             aria-selected={activeTab === 'table'}
             aria-controls="standings-table-panel"
+            tabIndex={activeTab === 'table' ? 0 : -1}
             onClick={() => setActiveTab('table')}
+            onKeyDown={(event) => handleTabListKeyDown(event, STANDINGS_TABS, 'table', setActiveTab)}
             className={tabClassName(activeTab === 'table')}
           >
             {isGroupedCompetition ? 'Group Tables' : 'League Table'}
@@ -249,7 +318,9 @@ export default function StandingsPage() {
             role="tab"
             aria-selected={activeTab === 'statistics'}
             aria-controls="standings-statistics-panel"
+            tabIndex={activeTab === 'statistics' ? 0 : -1}
             onClick={() => setActiveTab('statistics')}
+            onKeyDown={(event) => handleTabListKeyDown(event, STANDINGS_TABS, 'statistics', setActiveTab)}
             className={tabClassName(activeTab === 'statistics')}
           >
             Player Statistics
@@ -260,7 +331,9 @@ export default function StandingsPage() {
 
       <main className="flex-1">
         <div className="container mx-auto max-w-7xl">
-          {error ? (
+          {isLoading ? (
+            <PageSpinner />
+          ) : error ? (
             <div className="mx-4 my-10 flex flex-col items-center gap-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-8 text-center" role="alert">
               <AlertCircle className="h-6 w-6 text-red-400" />
               <p className="text-sm text-red-200">{error}</p>
@@ -283,7 +356,7 @@ export default function StandingsPage() {
                 <div className="border-b border-white/5 bg-[#00141e]/60 px-4 py-4 sm:px-6">
                   <div className="mx-auto flex max-w-5xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex w-fit rounded-2xl border border-white/5 bg-black/20 p-1" role="tablist" aria-label="Tournament groups">
-                      {(['A', 'B'] as CompetitionGroupKey[]).map((groupKey) => (
+                      {COMPETITION_GROUPS.map((groupKey) => (
                         <button
                           key={groupKey}
                           id={`group-${groupKey}-tab`}
@@ -291,7 +364,9 @@ export default function StandingsPage() {
                           role="tab"
                           aria-selected={activeGroup === groupKey}
                           aria-controls="active-group-standings-panel"
+                          tabIndex={activeGroup === groupKey ? 0 : -1}
                           onClick={() => setActiveGroup(groupKey)}
+                          onKeyDown={(event) => handleTabListKeyDown(event, COMPETITION_GROUPS, groupKey, setActiveGroup)}
                           className={`rounded-xl px-6 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-colors sm:px-8 ${activeGroup === groupKey ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white'}`}
                         >
                           Group {groupKey}

@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import apiClient from '@/lib/api-client';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { Select } from '@/components/ui/Select';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TeamAvatar } from '@/components/ui/TeamAvatar';
 
@@ -610,21 +611,22 @@ export default function TeamsManagementPage() {
 
                 <div className="space-y-2 sm:col-span-2">
                   <label htmlFor="team-status" className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Registration Status *</label>
-                  <select
+                  <Select
                     id="team-status"
                     required
+                    controlSize="large"
+                    fontWeight="normal"
+                    surface="glass"
                     value={formData.registrationStatus}
                     onChange={(event) => setFormData((current) => ({
                       ...current,
                       registrationStatus: event.target.value as RegistrationStatus,
                     }))}
-                    style={{ colorScheme: 'dark' }}
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all focus:border-blue-500/50 focus:bg-white/[0.08]"
                   >
                     <option value="registered" className="bg-[#0a0a0a]">Registered — ready for squad entry</option>
                     <option value="pending" className="bg-[#0a0a0a]">Pending — awaiting approval</option>
                     <option value="withdrawn" className="bg-[#0a0a0a]">Withdrawn — inactive</option>
-                  </select>
+                  </Select>
                   <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-600">Admin-entered teams default to registered. Change this only when needed.</p>
                 </div>
               </div>

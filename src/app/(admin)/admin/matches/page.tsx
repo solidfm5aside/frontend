@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, MapPin, Clock } from 'lucide-react';
 import MatchControllerModal from '@/components/admin/MatchControllerModal';
 import EditMatchModal from '@/components/admin/EditMatchModal';
 import { PageSpinner } from '@/components/ui/Spinner';
+import { Select } from '@/components/ui/Select';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatMatchDay, formatTime, getDayKey } from '@/utils/format';
 import type { ApiResponse } from '@/types';
@@ -55,6 +56,8 @@ export default function MatchesManagementPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
+  const backgroundRefreshQueued = useRef(false);
+  const foregroundRequestPending = useRef(false);
   const requestSequence = useRef(0);
 
   useEffect(() => {
@@ -74,6 +77,7 @@ export default function MatchesManagementPage() {
         const preferredTournament = chooseTournament(response.data, ['completed', 'upcoming']);
         setTournaments(response.data);
         setSelectedTournamentId(preferredTournament?._id ?? '');
+        foregroundRequestPending.current = Boolean(preferredTournament);
         if (!preferredTournament) setIsLoading(false);
       } catch (error: unknown) {
         if (cancelled) return;
@@ -90,8 +94,15 @@ export default function MatchesManagementPage() {
 
   const fetchMatches = useCallback(async (silent = false) => {
     if (!selectedTournamentId) return;
+    if (silent && foregroundRequestPending.current) {
+      backgroundRefreshQueued.current = true;
+      return;
+    }
     const requestId = ++requestSequence.current;
-    if (!silent) setIsLoading(true);
+    if (!silent) {
+      foregroundRequestPending.current = true;
+      setIsLoading(true);
+    }
     if (!silent) setLoadError(null);
     try {
       const params = new URLSearchParams({ tournamentId: selectedTournamentId });
@@ -100,15 +111,23 @@ export default function MatchesManagementPage() {
       if (!response.success) throw new Error(response.message || 'Matches could not be loaded');
       if (requestId === requestSequence.current) {
         setMatches(response.data);
+        setLoadError(null);
       }
     } catch (error: unknown) {
       console.error('Failed to fetch matches:', error);
-      if (requestId === requestSequence.current) {
-        if (!silent) setMatches([]);
+      if (requestId === requestSequence.current && !silent) {
+        setMatches([]);
         setLoadError(error instanceof Error ? error.message : 'Failed to load matches');
       }
     } finally {
-      if (!silent && requestId === requestSequence.current) setIsLoading(false);
+      if (!silent && requestId === requestSequence.current) {
+        foregroundRequestPending.current = false;
+        setIsLoading(false);
+        if (backgroundRefreshQueued.current) {
+          backgroundRefreshQueued.current = false;
+          queueMicrotask(() => void fetchMatches(true));
+        }
+      }
     }
   }, [selectedTournamentId, statusFilter]);
 
@@ -165,7 +184,7 @@ export default function MatchesManagementPage() {
     }
   };
 
-  if (isLoading) return <PageSpinner />;
+  if (isLoading && tournaments.length === 0 && !loadError) return <PageSpinner />;
 
   return (
     <div className="space-y-8 animate-reveal">
@@ -185,11 +204,15 @@ export default function MatchesManagementPage() {
               <label htmlFor="admin-matches-tournament" className="mb-1.5 block text-[9px] font-black uppercase tracking-widest text-neutral-500">
                 Competition
               </label>
-              <select
+              <Select
                 id="admin-matches-tournament"
+                controlSize="compact"
+                surface="neutral"
+                aria-busy={isLoading}
                 value={selectedTournamentId}
                 onChange={(event) => {
                   requestSequence.current += 1;
+                  foregroundRequestPending.current = true;
                   setSelectedTournamentId(event.target.value);
                   setMatches([]);
                   setSelectedDate(null);
@@ -198,14 +221,13 @@ export default function MatchesManagementPage() {
                   setLoadError(null);
                   setIsLoading(true);
                 }}
-                className="w-full rounded-xl border border-white/10 bg-neutral-950 px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-blue-500 [color-scheme:dark]"
               >
                 {tournaments.map((tournament) => (
                   <option key={tournament._id} value={tournament._id}>
                     {tournamentLabel(tournament)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           ) : null}
 
@@ -218,6 +240,7 @@ export default function MatchesManagementPage() {
                 onClick={() => {
                   if (f === statusFilter) return;
                   requestSequence.current += 1;
+                  foregroundRequestPending.current = true;
                   setStatusFilter(f);
                   setMatches([]);
                   setSelectedDate(null);
@@ -235,7 +258,9 @@ export default function MatchesManagementPage() {
         </div>
       </div>
 
-      {loadError ? (
+      {isLoading ? (
+        <PageSpinner />
+      ) : loadError ? (
         <div className="py-24 text-center rounded-[32px] border border-red-500/20 bg-red-500/5" role="alert">
           <p className="text-[10px] font-black text-red-300 uppercase tracking-[0.25em]">{loadError}</p>
           <button

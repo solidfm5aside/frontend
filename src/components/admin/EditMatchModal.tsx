@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
+
+import { Select } from '@/components/ui/Select';
+import apiClient from '@/lib/api-client';
 import type { ApiResponse } from '@/types';
 
 interface Venue {
@@ -28,6 +30,15 @@ interface EditMatchModalProps {
   onUpdate: () => void;
 }
 
+const FOCUSABLE_ELEMENTS = [
+  'a[href]',
+  'button:not(:disabled)',
+  'input:not(:disabled)',
+  'select:not(:disabled)',
+  'textarea:not(:disabled)',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 export default function EditMatchModal({ matchId, initialDate, initialVenue, onClose, onUpdate }: EditMatchModalProps) {
   const [date, setDate] = useState(() => toLocalDateTimeInput(initialDate));
   const [venue, setVenue] = useState(initialVenue || '');
@@ -36,6 +47,71 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
   const [loadingVenues, setLoadingVenues] = useState(true);
   const [venueLoadError, setVenueLoadError] = useState<string | null>(null);
   const venueRequestIdRef = useRef(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const isSavingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+
+  const requestClose = useCallback(() => {
+    if (!isSavingRef.current) onCloseRef.current();
+  }, []);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !dialog) return;
+
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_ELEMENTS)).filter(
+        (element) => !element.matches(':disabled') && element.getClientRects().length > 0
+      );
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement;
+
+      if (!dialog.contains(activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [requestClose]);
 
   const fetchVenues = useCallback(async () => {
     const requestId = ++venueRequestIdRef.current;
@@ -69,6 +145,8 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const response = await apiClient.patch<ApiResponse<unknown>, ApiResponse<unknown>>(`/matches/${matchId}/details`, {
@@ -83,29 +161,50 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, 'Failed to update match details'));
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm animate-reveal">
-      <div role="dialog" aria-modal="true" aria-labelledby="edit-match-title" className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-[40px] border border-white/10 bg-[#0a0a0a] p-8 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-reveal">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Close match editor"
+        disabled={isSaving}
+        onClick={requestClose}
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+      />
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-match-title"
+        aria-describedby="edit-match-description"
+        aria-busy={isSaving}
+        tabIndex={-1}
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[40px] border border-white/10 bg-[#0a0a0a] p-8 shadow-2xl"
+      >
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h2 id="edit-match-title" className="text-2xl font-black italic tracking-tighter text-white uppercase">Reschedule</h2>
-            <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Update time and venue</p>
+            <p id="edit-match-description" className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Update time and venue</p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="Close match editor"
-            onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white transition-all border border-white/5"
+            disabled={isSaving}
+            onClick={requestClose}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white transition-all border border-white/5 disabled:cursor-not-allowed disabled:opacity-40"
           >
             ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit}>
+          <fieldset disabled={isSaving} className="space-y-6 disabled:opacity-70">
           <div className="space-y-2">
             <label htmlFor="edit-match-date" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 block">Date & Time</label>
             <input
@@ -120,31 +219,26 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
 
           <div className="space-y-2">
             <label htmlFor="edit-match-venue" className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 block">Venue</label>
-            <div className="relative">
-              <select
-                id="edit-match-venue"
-                required
-                value={venue}
-                onChange={(e) => setVenue(e.target.value)}
-                disabled={loadingVenues || (!venue && venues.length === 0)}
-                aria-describedby={venueLoadError ? 'edit-match-venue-error' : loadingVenues ? 'edit-match-venue-status' : undefined}
-                aria-invalid={venueLoadError && !venue ? true : undefined}
-                className="w-full bg-black border border-white/10 rounded-xl px-4 py-4 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm placeholder:text-neutral-700 font-medium appearance-none disabled:opacity-50"
-              >
-                <option value="" disabled>Select a venue</option>
-                {venue && !venues.some((item) => item.name === venue) ? (
-                  <option value={venue}>{venue} (current venue)</option>
-                ) : null}
-                {venues.map((v) => (
-                  <option key={v._id} value={v.name}>{v.name}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-white/50">
-                <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                </svg>
-              </div>
-            </div>
+            <Select
+              id="edit-match-venue"
+              required
+              controlSize="large"
+              surface="black"
+              fontWeight="medium"
+              value={venue}
+              onChange={(e) => setVenue(e.target.value)}
+              disabled={loadingVenues || (!venue && venues.length === 0)}
+              aria-describedby={venueLoadError ? 'edit-match-venue-error' : loadingVenues ? 'edit-match-venue-status' : undefined}
+              aria-invalid={venueLoadError && !venue ? true : undefined}
+            >
+              <option value="" disabled>Select a venue</option>
+              {venue && !venues.some((item) => item.name === venue) ? (
+                <option value={venue}>{venue} (current venue)</option>
+              ) : null}
+              {venues.map((v) => (
+                <option key={v._id} value={v.name}>{v.name}</option>
+              ))}
+            </Select>
             {loadingVenues ? (
               <p id="edit-match-venue-status" role="status" className="text-[10px] font-bold text-neutral-500">
                 Loading venue catalogue...
@@ -172,8 +266,9 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
           <div className="pt-4 flex gap-4">
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 rounded-xl border border-white/10 bg-transparent py-4 text-xs font-black uppercase tracking-widest text-white hover:bg-white/5 transition-all"
+              disabled={isSaving}
+              onClick={requestClose}
+              className="flex-1 rounded-xl border border-white/10 bg-transparent py-4 text-xs font-black uppercase tracking-widest text-white hover:bg-white/5 transition-all disabled:cursor-not-allowed disabled:opacity-40"
             >
               Cancel
             </button>
@@ -185,6 +280,7 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
               {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>

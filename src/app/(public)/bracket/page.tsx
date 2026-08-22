@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronDown, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import KnockoutBracket from '@/components/KnockoutBracket';
+import { Select } from '@/components/ui/Select';
 import { PageSpinner } from '@/components/ui/Spinner';
 
 interface Tournament {
@@ -120,21 +121,25 @@ export default function BracketPage() {
         </div>
 
         {result.tournaments.length > 0 && (
-          <div className="group relative w-full shrink-0 sm:w-auto">
+          <div className="w-full shrink-0 sm:w-auto">
             <label htmlFor="bracket-tournament" className="sr-only">Choose tournament</label>
-            <select
+            <Select
               id="bracket-tournament"
+              containerClassName="w-full sm:w-auto"
+              controlSize="large"
+              fontWeight="black"
+              optionSurface="black"
+              surface="glass"
               value={selectedId}
               onChange={(event) => setSelectedId(event.target.value)}
-              className="min-h-14 w-full cursor-pointer appearance-none rounded-2xl border border-white/10 bg-white/5 px-5 py-4 pr-12 text-xs font-black uppercase tracking-widest text-white transition-all focus:border-blue-500 focus:outline-none sm:min-w-[280px] sm:px-8 sm:py-5 sm:pr-14"
+              className="border-white/10 uppercase tracking-widest sm:min-w-[280px] [@media(pointer:fine)]:text-xs"
             >
               {result.tournaments.map((tournament) => (
                 <option key={tournament._id} value={tournament._id} className="bg-black text-white">
                   {tournament.name} (S{tournament.season})
                 </option>
               ))}
-            </select>
-            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500 transition-colors group-hover:text-blue-500 sm:right-6" />
+            </Select>
           </div>
         )}
       </div>
