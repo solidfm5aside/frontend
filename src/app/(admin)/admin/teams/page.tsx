@@ -384,10 +384,10 @@ export default function TeamsManagementPage() {
   const lastVisibleTeam = Math.min(currentPage * pagination.limit, pagination.total);
 
   return (
-    <div className="space-y-10 md:space-y-12 animate-reveal">
+    <div className="space-y-8 animate-reveal md:space-y-10">
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-none">Teams.</h1>
+          <h1 className="text-3xl font-black italic uppercase leading-none tracking-tighter text-white sm:text-4xl">Teams.</h1>
           <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">Manage Men&apos;s &amp; Women&apos;s Registrations</p>
         </div>
 
@@ -459,9 +459,9 @@ export default function TeamsManagementPage() {
           ref={formSectionRef}
           id="admin-team-form"
           aria-labelledby="admin-team-form-title"
-          className="rounded-[28px] border border-blue-500/20 bg-blue-500/5 p-5 backdrop-blur-3xl sm:rounded-[40px] sm:p-8 animate-reveal"
+          className="rounded-[28px] border border-blue-500/20 bg-blue-500/5 p-5 backdrop-blur-3xl sm:rounded-[32px] sm:p-6 animate-reveal"
         >
-          <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 id="admin-team-form-title" className="text-xl font-black italic uppercase tracking-tight text-white">
                 {editingTeam ? `Edit ${editingTeam.name}` : 'New Team Registration'}
@@ -474,12 +474,12 @@ export default function TeamsManagementPage() {
           </div>
 
           <form onSubmit={handleSaveTeam} aria-busy={isSaving}>
-            <fieldset disabled={isSaving} className="space-y-8 disabled:opacity-70">
+            <fieldset disabled={isSaving} className="space-y-6 disabled:opacity-70">
             {formError ? (
               <div role="alert" className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs font-bold text-red-400">{formError}</div>
             ) : null}
 
-            <div className="grid gap-8 lg:grid-cols-[180px_minmax(0,1fr)]">
+            <div className="grid gap-6 lg:grid-cols-[160px_minmax(0,1fr)]">
               <div className="flex flex-col items-center lg:items-start">
                 <label htmlFor="team-logo" className="mb-3 text-[10px] font-black uppercase tracking-widest text-neutral-500">Team Logo</label>
                 <div className="group relative">
@@ -511,7 +511,7 @@ export default function TeamsManagementPage() {
                       type="button"
                       onClick={clearLogo}
                       aria-label={editingTeam ? 'Discard selected replacement logo' : 'Remove selected team logo'}
-                      className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition-colors hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400"
+                      className="absolute -right-2 -top-2 flex h-11 w-11 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition-colors hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-400"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -523,10 +523,10 @@ export default function TeamsManagementPage() {
                   isSavedLogoRemoved ? (
                     <div role="status" className="mt-3 rounded-xl border border-orange-500/20 bg-orange-500/10 p-3 text-center lg:text-left">
                       <p className="text-[9px] font-bold text-orange-300">Saved logo will be removed when you save.</p>
-                      <button type="button" onClick={restoreSavedLogo} className="mt-2 text-[9px] font-black uppercase tracking-widest text-white underline underline-offset-4">Undo removal</button>
+                      <button type="button" onClick={restoreSavedLogo} className="mt-2 min-h-11 rounded-lg px-3 text-[9px] font-black uppercase tracking-widest text-white underline underline-offset-4">Undo removal</button>
                     </div>
                   ) : (
-                    <button type="button" onClick={markSavedLogoForRemoval} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-[9px] font-black uppercase tracking-widest text-red-400 transition-colors hover:bg-red-500/20">
+                    <button type="button" onClick={markSavedLogoForRemoval} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-[9px] font-black uppercase tracking-widest text-red-400 transition-colors hover:bg-red-500/20">
                       <Trash2 className="h-3.5 w-3.5" /> Remove saved logo
                     </button>
                   )
@@ -565,7 +565,7 @@ export default function TeamsManagementPage() {
                     value={formData.name}
                     onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
                     placeholder="e.g. Enugu Stars"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -579,7 +579,7 @@ export default function TeamsManagementPage() {
                     value={formData.city}
                     onChange={(event) => setFormData((current) => ({ ...current, city: event.target.value }))}
                     placeholder="e.g. Enugu"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -591,7 +591,7 @@ export default function TeamsManagementPage() {
                     value={formData.stadium}
                     onChange={(event) => setFormData((current) => ({ ...current, stadium: event.target.value }))}
                     placeholder="e.g. Solid FM Arena"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -604,7 +604,7 @@ export default function TeamsManagementPage() {
                     onChange={(event) => setFormData((current) => ({ ...current, colors: event.target.value }))}
                     placeholder="e.g. Blue, White"
                     aria-describedby="team-colors-help"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                   <p id="team-colors-help" className="text-[9px] font-bold uppercase tracking-widest text-neutral-600">Separate multiple colors with commas.</p>
                 </div>
@@ -621,7 +621,7 @@ export default function TeamsManagementPage() {
                     value={formData.foundedYear}
                     onChange={(event) => setFormData((current) => ({ ...current, foundedYear: event.target.value }))}
                     placeholder="e.g. 2018"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -636,7 +636,7 @@ export default function TeamsManagementPage() {
                     value={formData.captainName}
                     onChange={(event) => setFormData((current) => ({ ...current, captainName: event.target.value }))}
                     placeholder="Full name"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -652,7 +652,7 @@ export default function TeamsManagementPage() {
                     value={formData.contactPhone}
                     onChange={(event) => setFormData((current) => ({ ...current, contactPhone: event.target.value }))}
                     placeholder="080XXXXXXXX"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -667,7 +667,7 @@ export default function TeamsManagementPage() {
                     value={formData.contactEmail}
                     onChange={(event) => setFormData((current) => ({ ...current, contactEmail: event.target.value }))}
                     placeholder="name@example.com"
-                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08]"
+                    className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] [@media(pointer:fine)]:text-sm"
                   />
                 </div>
 
@@ -720,7 +720,7 @@ export default function TeamsManagementPage() {
       {loadError ? (
         <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400 sm:flex-row sm:items-center sm:justify-between">
           <span>{loadError}</span>
-          <button type="button" onClick={() => void fetchTeams(currentPage, filter, divisionFilter)} className="text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4">Try Again</button>
+          <button type="button" onClick={() => void fetchTeams(currentPage, filter, divisionFilter)} className="min-h-11 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4">Try Again</button>
         </div>
       ) : null}
 
@@ -741,10 +741,10 @@ export default function TeamsManagementPage() {
           <table className="w-full min-w-[860px] border-collapse text-left">
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.02]">
-                <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Squad Name / Division</th>
-                <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Captain / Contact</th>
-                <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Status</th>
-                <th className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Actions</th>
+                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Squad Name / Division</th>
+                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Captain / Contact</th>
+                <th className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Status</th>
+                <th className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -756,7 +756,7 @@ export default function TeamsManagementPage() {
                 const isDeleting = isBusy && teamAction.kind === 'delete';
                 return (
                   <tr key={team._id} className="group transition-colors hover:bg-white/[0.02]">
-                    <td className="px-4 py-6 md:px-8 md:py-8">
+                    <td className="px-4 py-5 md:px-6 md:py-6">
                       <div className="flex items-center gap-4">
                         <TeamAvatar name={team.name} logo={team.logo} size="sm" />
                         <div>
@@ -770,12 +770,12 @@ export default function TeamsManagementPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-6 md:px-8 md:py-8">
+                    <td className="px-4 py-5 md:px-6 md:py-6">
                       <p className="text-sm font-medium text-neutral-300">{team.captainName}</p>
                       <p className="mt-1 break-all text-[10px] font-bold text-neutral-600">{team.contactPhone} • {team.contactEmail}</p>
                     </td>
-                    <td className="px-4 py-6 md:px-8 md:py-8"><StatusBadge status={team.registrationStatus} /></td>
-                    <td className="px-4 py-6 text-right md:px-8 md:py-8">
+                    <td className="px-4 py-5 md:px-6 md:py-6"><StatusBadge status={team.registrationStatus} /></td>
+                    <td className="px-4 py-5 text-right md:px-6 md:py-6">
                       <div className="flex items-center justify-end gap-3">
                         <button
                           type="button"
@@ -783,7 +783,7 @@ export default function TeamsManagementPage() {
                           disabled={mutationsLocked}
                           aria-label={`Edit ${team.name}`}
                           title="Edit Team"
-                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/5 bg-white/5 text-neutral-500 transition-all hover:border-blue-500/50 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                           className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 bg-white/5 text-neutral-500 transition-all hover:border-blue-500/50 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -791,7 +791,7 @@ export default function TeamsManagementPage() {
                           href={'/admin/teams/' + team._id + '/squad'}
                           aria-label={'Manage ' + team.name + ' squad'}
                           title="Manage Squad"
-                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/5 bg-white/5 text-neutral-500 transition-all hover:border-blue-500/50 hover:text-blue-500"
+                           className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 bg-white/5 text-neutral-500 transition-all hover:border-blue-500/50 hover:text-blue-500"
                         >
                           <Users className="h-4 w-4" />
                         </Link>
@@ -803,7 +803,7 @@ export default function TeamsManagementPage() {
                             disabled={mutationsLocked}
                             aria-label={'Approve ' + team.name}
                             title="Approve Team"
-                            className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                             className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isApproving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                           </button>
@@ -816,7 +816,7 @@ export default function TeamsManagementPage() {
                             disabled={mutationsLocked}
                             aria-label={'Withdraw ' + team.name}
                             title="Withdraw Team"
-                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 text-neutral-500 transition-all hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                             className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-neutral-500 transition-all hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isWithdrawing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                           </button>
@@ -828,7 +828,7 @@ export default function TeamsManagementPage() {
                           disabled={mutationsLocked}
                           aria-label={'Delete ' + team.name}
                           title="Delete Team"
-                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/5 text-neutral-700 transition-all hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                           className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 text-neutral-700 transition-all hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isDeleting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </button>
@@ -857,7 +857,7 @@ export default function TeamsManagementPage() {
               type="button"
               disabled={currentPage === 1 || isLoading}
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              className="rounded-xl border border-white/5 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-neutral-500"
+              className="min-h-11 rounded-xl border border-white/5 px-4 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-neutral-500"
             >
               Prev
             </button>
@@ -872,7 +872,7 @@ export default function TeamsManagementPage() {
                   aria-label={'Go to teams page ' + page}
                   aria-current={currentPage === page ? 'page' : undefined}
                   className={clsx(
-                    'h-8 w-8 rounded-lg text-[10px] font-black transition-all disabled:cursor-not-allowed disabled:opacity-50',
+                    'h-11 w-11 rounded-lg text-[10px] font-black transition-all disabled:cursor-not-allowed disabled:opacity-50',
                     currentPage === page ? 'bg-blue-600 text-white' : 'text-neutral-500 hover:text-white',
                   )}
                 >
@@ -885,7 +885,7 @@ export default function TeamsManagementPage() {
               type="button"
               disabled={currentPage === pagination.pages || isLoading}
               onClick={() => setCurrentPage((page) => Math.min(pagination.pages, page + 1))}
-              className="rounded-xl border border-white/5 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-neutral-500"
+              className="min-h-11 rounded-xl border border-white/5 px-4 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-neutral-500"
             >
               Next
             </button>

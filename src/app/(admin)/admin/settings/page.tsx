@@ -283,10 +283,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-10 max-w-5xl">
+    <div className="max-w-5xl space-y-8 md:space-y-10">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-extrabold uppercase italic tracking-tighter text-white">
+          <h1 className="text-3xl font-extrabold uppercase italic tracking-tighter text-white sm:text-4xl">
             Site <span className="text-blue-500">Settings</span>
           </h1>
           <p className="mt-2 text-neutral-400 font-medium">Manage global configuration, notifications, and landing page content.</p>
@@ -332,7 +332,7 @@ export default function SettingsPage() {
             tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
             onKeyDown={(event) => handleTabListKeyDown(event, tab.id, setActiveTab)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 md:py-4 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all ${
+            className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all md:py-4 md:text-xs ${
               activeTab === tab.id 
                 ? 'bg-blue-600 text-white shadow-lg' 
                 : 'text-neutral-500 hover:text-white hover:bg-white/5'
@@ -350,17 +350,17 @@ export default function SettingsPage() {
           id={`settings-panel-${activeTab}`}
           role="tabpanel"
           aria-labelledby={`settings-tab-${activeTab}`}
-          className="min-h-[400px] space-y-10"
+          className="min-h-[400px] space-y-8"
         >
         
         {/* TOURNAMENT OPERATIONS */}
         {activeTab === 'status' && (
-          <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-10 shadow-2xl animate-in fade-in duration-300">
-            <div className="mb-8 border-b border-white/5 pb-6">
-              <h2 className="text-2xl font-black uppercase tracking-tighter text-white italic">Tournament Operations</h2>
+          <div className="rounded-[32px] border border-white/5 bg-white/[0.02] p-5 shadow-2xl animate-in fade-in duration-300 sm:p-6 md:p-8">
+            <div className="mb-6 border-b border-white/5 pb-5">
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">Tournament Operations</h2>
               <p className="text-sm text-neutral-500 mt-1">Control critical tournament states like team registration periods.</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between p-6 bg-black/40 border border-white/5 rounded-3xl">
+            <div className="flex flex-col gap-4 rounded-3xl border border-white/5 bg-black/40 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div>
                 <h3 className="text-lg font-bold text-white mb-1">Registration is Live</h3>
                 <p className="text-xs text-neutral-500 uppercase tracking-widest max-w-sm">When active, the public landing page will display the &apos;NOW LIVE&apos; banner.</p>
@@ -381,14 +381,14 @@ export default function SettingsPage() {
 
         {/* GLOBAL ANNOUNCEMENTS */}
         {activeTab === 'announcement' && (
-          <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-10 shadow-2xl animate-in fade-in duration-300 text-neutral-100">
-            <div className="mb-8 border-b border-white/5 pb-6">
-              <h2 className="text-2xl font-black uppercase tracking-tighter text-white italic">Global Alerts</h2>
+          <div className="rounded-[32px] border border-white/5 bg-white/[0.02] p-5 text-neutral-100 shadow-2xl animate-in fade-in duration-300 sm:p-6 md:p-8">
+            <div className="mb-6 border-b border-white/5 pb-5">
+              <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">Global Alerts</h2>
               <p className="text-sm text-neutral-500 mt-1">Manage the notification bar displayed at the very top of the website.</p>
             </div>
             
-            <div className="space-y-6">
-               <div className="flex items-center justify-between p-6 bg-black/40 border border-white/5 rounded-3xl">
+            <div className="space-y-5">
+               <div className="flex items-center justify-between rounded-3xl border border-white/5 bg-black/40 p-4 sm:p-5">
                   <div>
                     <h3 className="text-lg font-bold text-white mb-1">Active Notification</h3>
                     <p className="text-xs text-neutral-500 uppercase tracking-widest">Show or hide the global announcement bar.</p>
@@ -426,7 +426,7 @@ export default function SettingsPage() {
                           value={announcement.link}
                           onChange={(e) => setAnnouncement({...announcement, link: e.target.value})}
                           placeholder="e.g. /register-team or https://..."
-                          className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 pl-11 text-white focus:border-red-500 transition-all font-mono text-sm"
+                          className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 pl-11 font-mono text-base text-white transition-all focus:border-red-500 [@media(pointer:fine)]:text-sm"
                         />
                         <ExternalLink className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-600" />
                      </div>
@@ -438,10 +438,10 @@ export default function SettingsPage() {
 
         {/* PUBLICITY CAROUSEL */}
         {activeTab === 'publicity' && (
-          <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-10 shadow-2xl animate-in fade-in duration-300">
-            <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/5 pb-6 gap-4">
+          <div className="rounded-[32px] border border-white/5 bg-white/[0.02] p-5 shadow-2xl animate-in fade-in duration-300 sm:p-6 md:p-8">
+            <div className="mb-6 flex flex-col justify-between gap-4 border-b border-white/5 pb-5 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-2xl font-black uppercase tracking-tighter text-white italic">Publicity & Ads</h2>
+                <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">Publicity & Ads</h2>
                 <p className="text-sm text-neutral-500 mt-1">Manage high-impact banners for the homepage carousel.</p>
               </div>
               <button
@@ -455,14 +455,14 @@ export default function SettingsPage() {
 
             <div className="space-y-6">
               {landingAds.length === 0 ? (
-                <div className="py-20 text-center border-2 border-dashed border-white/5 rounded-[40px] opacity-30">
+                <div className="rounded-[32px] border-2 border-dashed border-white/5 py-12 text-center opacity-30">
                    <LayoutPanelLeft className="h-12 w-12 mx-auto mb-4 text-neutral-500" />
                    <p className="text-xs font-black uppercase tracking-widest">No publicity banners yet.</p>
                 </div>
               ) : (
                 landingAds.map((ad, idx) => (
-                  <div key={idx} className="flex flex-col lg:flex-row gap-6 p-6 bg-black/40 border border-white/5 rounded-[32px] relative group overflow-hidden">
-                    <div className="flex-1 space-y-6 pr-4">
+                  <div key={idx} className="group relative flex flex-col gap-5 overflow-hidden rounded-[28px] border border-white/5 bg-black/40 p-5 lg:flex-row">
+                    <div className="flex-1 space-y-5 lg:pr-4">
                       <div className="flex items-center justify-between">
                          <span className="text-[10px] font-black uppercase tracking-widest text-blue-500">Slide #{idx+1}</span>
                          <div className="flex items-center gap-3">
@@ -473,9 +473,9 @@ export default function SettingsPage() {
                              aria-checked={ad.isActive}
                              aria-label={`Toggle publicity slide ${idx + 1}`}
                              onClick={() => updateAd(idx, 'isActive', !ad.isActive)}
-                             className={`h-5 w-10 rounded-full p-0.5 transition-colors ${ad.isActive ? 'bg-emerald-500' : 'bg-neutral-800'}`}
+                             className={`h-11 w-14 rounded-full p-3 transition-colors ${ad.isActive ? 'bg-emerald-500' : 'bg-neutral-800'}`}
                            >
-                              <div className={`h-4 w-4 bg-white rounded-full transition-transform ${ad.isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+                              <div className={`h-5 w-5 rounded-full bg-white transition-transform ${ad.isActive ? 'translate-x-3' : 'translate-x-0'}`} />
                            </button>
                          </div>
                       </div>
@@ -500,7 +500,7 @@ export default function SettingsPage() {
                             value={ad.link}
                             onChange={(e) => updateAd(idx, 'link', e.target.value)}
                             placeholder="e.g. https://cojude.com"
-                            className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 transition-all font-mono text-xs"
+                            className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 font-mono text-base text-white transition-all focus:border-blue-500 [@media(pointer:fine)]:text-xs"
                           />
                         </div>
                       </div>
@@ -528,7 +528,7 @@ export default function SettingsPage() {
                              value={ad.imageUrl}
                              onChange={(e) => updateAd(idx, 'imageUrl', e.target.value)}
                              placeholder="Image URL..."
-                             className="flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 transition-all font-mono text-[10px]"
+                             className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-4 py-3 font-mono text-base text-white transition-all focus:border-blue-500 [@media(pointer:fine)]:text-xs"
                            />
                         </div>
                       </div>
@@ -554,7 +554,7 @@ export default function SettingsPage() {
                          type="button"
                          aria-label={`Remove publicity slide ${idx + 1}`}
                          onClick={() => removeAd(idx)}
-                         className="absolute top-2 right-2 h-8 w-8 bg-black/60 backdrop-blur-md rounded-lg text-red-500 hover:bg-red-600 hover:text-white transition-all flex items-center justify-center"
+                          className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-xl bg-black/60 text-red-500 backdrop-blur-md transition-all hover:bg-red-600 hover:text-white"
                        >
                          <Trash2 className="h-4 w-4" />
                        </button>
@@ -568,10 +568,10 @@ export default function SettingsPage() {
 
         {/* SPONSORS SECTION */}
         {activeTab === 'sponsors' && (
-          <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-10 shadow-2xl animate-in fade-in duration-300">
-            <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/5 pb-6 gap-4">
+          <div className="rounded-[32px] border border-white/5 bg-white/[0.02] p-5 shadow-2xl animate-in fade-in duration-300 sm:p-6 md:p-8">
+            <div className="mb-6 flex flex-col justify-between gap-4 border-b border-white/5 pb-5 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-2xl font-black uppercase tracking-tighter text-white italic">Sponsors & Partners</h2>
+                <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">Sponsors & Partners</h2>
                 <p className="text-sm text-neutral-500 mt-1">Manage brands for the &quot;Powering the Game&quot; section.</p>
               </div>
               <button
@@ -585,7 +585,7 @@ export default function SettingsPage() {
 
             <div className="space-y-6">
               {sponsors.map((sponsor, idx) => (
-                <div key={idx} className="flex flex-col md:flex-row gap-6 p-6 bg-black/40 border border-white/5 rounded-3xl relative group">
+                <div key={idx} className="group relative flex flex-col gap-5 rounded-3xl border border-white/5 bg-black/40 p-5 md:flex-row">
                   <div className="flex-1 space-y-4 md:pl-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -634,7 +634,7 @@ export default function SettingsPage() {
                           value={sponsor.logo}
                           onChange={(e) => updateSponsor(idx, 'logo', e.target.value)}
                           placeholder="Or paste URL..."
-                          className="w-full sm:flex-1 bg-black border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 transition-all font-mono text-xs"
+                          className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 font-mono text-base text-white transition-all focus:border-blue-500 sm:flex-1 [@media(pointer:fine)]:text-xs"
                         />
                       </div>
                     </div>
@@ -653,7 +653,7 @@ export default function SettingsPage() {
                          />
                        ) : <span className="text-[8px] text-neutral-400 font-bold uppercase">No Image</span>}
                     </div>
-                    <button type="button" aria-label={`Remove ${sponsor.name || `sponsor ${idx + 1}`}`} onClick={() => removeSponsor(idx)} className="h-10 w-full px-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest">
+                     <button type="button" aria-label={`Remove ${sponsor.name || `sponsor ${idx + 1}`}`} onClick={() => removeSponsor(idx)} className="h-11 w-full rounded-xl border border-red-500/20 bg-red-500/10 px-4 text-[10px] font-black uppercase tracking-widest text-red-500 transition-all hover:bg-red-600 hover:text-white">
                       Remove
                     </button>
                   </div>
@@ -665,10 +665,10 @@ export default function SettingsPage() {
 
         {/* FAQ SECTION */}
         {activeTab === 'faq' && (
-          <div className="rounded-[40px] border border-white/5 bg-white/[0.02] p-8 md:p-10 shadow-2xl animate-in fade-in duration-300">
-            <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-white/5 pb-6 gap-4">
+          <div className="rounded-[32px] border border-white/5 bg-white/[0.02] p-5 shadow-2xl animate-in fade-in duration-300 sm:p-6 md:p-8">
+            <div className="mb-6 flex flex-col justify-between gap-4 border-b border-white/5 pb-5 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-2xl font-black uppercase tracking-tighter text-white italic">Quick Brief / FAQ</h2>
+                <h2 className="text-xl font-black uppercase italic tracking-tighter text-white">Quick Brief / FAQ</h2>
                 <p className="text-sm text-neutral-500 mt-1">Update landing page questions.</p>
               </div>
               <button type="button" onClick={addFaq} className="px-6 py-3 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 hover:border-blue-500 rounded-2xl text-blue-500 text-xs font-black uppercase tracking-widest transition-all">
@@ -677,8 +677,8 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-6">
               {faqs.map((faq, idx) => (
-                <div key={idx} className="flex gap-4 items-start p-6 bg-black/40 border border-white/5 rounded-3xl relative">
-                  <div className="font-black text-white/5 text-4xl italic w-12 text-center absolute -left-4 top-4 hidden sm:block">Q{idx + 1}</div>
+                <div key={idx} className="relative flex items-start gap-4 rounded-3xl border border-white/5 bg-black/40 p-5">
+                  <div className="absolute -left-4 top-4 hidden w-12 text-center text-3xl font-black italic text-white/5 sm:block">Q{idx + 1}</div>
                   <div className="flex-1 space-y-4 sm:pl-8">
                      <div>
                         <label htmlFor={`faq-question-${idx}`} className="block text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 mb-2">Question</label>
@@ -689,7 +689,7 @@ export default function SettingsPage() {
                         <textarea id={`faq-answer-${idx}`} value={faq.a} onChange={(e) => updateFaq(idx, 'a', e.target.value)} rows={3} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white focus:border-blue-500 transition-all font-medium resize-y" />
                      </div>
                   </div>
-                  <button type="button" aria-label={`Remove FAQ ${idx + 1}`} onClick={() => removeFaq(idx)} className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-500 hover:bg-red-500 transition-all">✕</button>
+                   <button type="button" aria-label={`Remove FAQ ${idx + 1}`} onClick={() => removeFaq(idx)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-500 transition-all hover:bg-red-500">✕</button>
                 </div>
               ))}
             </div>

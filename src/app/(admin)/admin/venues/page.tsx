@@ -125,11 +125,11 @@ export default function VenuesPage() {
   }
 
   return (
-    <div className="space-y-10 animate-reveal">
+    <div className="space-y-8 animate-reveal md:space-y-10">
       {/* Header */}
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-4xl font-black italic tracking-tighter text-white uppercase">
+          <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase sm:text-4xl">
             Tournament <span className="text-blue-500 not-italic">Venues.</span>
           </h1>
           <p className="mt-2 text-xs font-bold text-neutral-500 uppercase tracking-widest">
@@ -169,7 +169,7 @@ export default function VenuesPage() {
             type="button"
             onClick={() => void fetchVenues()}
             disabled={loading}
-            className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-400/20 bg-black/20 px-4 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-black/30 disabled:cursor-wait disabled:opacity-50"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-400/20 bg-black/20 px-4 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-black/30 disabled:cursor-wait disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
             {loading ? 'Retrying...' : 'Retry'}
@@ -182,15 +182,15 @@ export default function VenuesPage() {
       ) : null}
 
       {isFormOpen && (
-        <div className="rounded-[40px] border border-blue-500/20 bg-blue-500/5 p-8 backdrop-blur-3xl animate-reveal">
-          <div className="mb-8 flex items-center justify-between">
+        <div className="rounded-[32px] border border-blue-500/20 bg-blue-500/5 p-5 backdrop-blur-3xl animate-reveal sm:p-6">
+          <div className="mb-6 flex items-center justify-between">
             <h2 className="text-xl font-black italic uppercase tracking-tight text-white">
               {editingId ? 'Edit Venue' : 'New Venue'}
             </h2>
             <button 
               type="button"
               onClick={() => setIsFormOpen(false)}
-              className="text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white transition-colors"
+              className="min-h-11 px-3 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-white"
             >
               Cancel
             </button>
@@ -202,7 +202,7 @@ export default function VenuesPage() {
               <input
                 id="venue-name"
                 required
-                className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
+                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all focus:border-blue-500/50 [@media(pointer:fine)]:text-sm"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g. Nnamdi Azikiwe Stadium"
@@ -213,7 +213,7 @@ export default function VenuesPage() {
               <input
                 id="venue-address"
                 required
-                className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
+                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all focus:border-blue-500/50 [@media(pointer:fine)]:text-sm"
                 value={formData.address}
                 onChange={e => setFormData({ ...formData, address: e.target.value })}
                 placeholder="e.g. Main Pitch, Enugu"
@@ -226,7 +226,7 @@ export default function VenuesPage() {
                 required
                 type="number"
                 min="1"
-                className="w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-white focus:border-blue-500/50 outline-none transition-all"
+                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all focus:border-blue-500/50 [@media(pointer:fine)]:text-sm"
                 value={formData.importance}
                 onChange={e => setFormData({ ...formData, importance: parseInt(e.target.value) || 1 })}
               />
@@ -248,14 +248,14 @@ export default function VenuesPage() {
       {/* Venues Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {venues.map((venue) => (
-          <div key={venue._id} className="group relative rounded-[32px] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-xl transition-all hover:bg-white/[0.04]">
-            <div className="absolute right-6 top-6 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <div key={venue._id} className="group relative rounded-[28px] border border-white/5 bg-white/[0.02] p-6 backdrop-blur-xl transition-all hover:bg-white/[0.04]">
+            <div className="absolute right-4 top-4 flex gap-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
               <button 
                 type="button"
                 onClick={() => handleEdit(venue)}
                 aria-label={`Edit ${venue.name}`}
                 disabled={!isCatalogueCurrent}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-blue-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
               >
                 <Edit2 className="h-3 w-3" />
               </button>
@@ -264,7 +264,7 @@ export default function VenuesPage() {
                 onClick={() => handleDelete(venue._id)}
                 aria-label={`Delete ${venue.name}`}
                 disabled={!isCatalogueCurrent}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-red-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -286,7 +286,7 @@ export default function VenuesPage() {
               <p className="text-xs font-medium text-neutral-400 leading-relaxed">{venue.address}</p>
             </div>
 
-            <div className="mt-8 flex items-center justify-between border-t border-white/5 pt-6">
+            <div className="mt-6 flex items-center justify-between border-t border-white/5 pt-5">
               <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Priority Level</span>
               <span className="text-lg font-black italic text-neutral-300">#{venue.importance}</span>
             </div>
@@ -294,7 +294,7 @@ export default function VenuesPage() {
         ))}
 
         {venues.length === 0 && !isFormOpen && hasLoadedSuccessfully && !loadError && (
-          <div className="col-span-full flex flex-col items-center justify-center rounded-[40px] border border-dashed border-white/10 bg-white/[0.02] py-20 text-center">
+          <div className="col-span-full flex flex-col items-center justify-center rounded-[32px] border border-dashed border-white/10 bg-white/[0.02] py-12 text-center">
              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5 text-neutral-600">
                 <MapPin className="h-8 w-8" />
              </div>

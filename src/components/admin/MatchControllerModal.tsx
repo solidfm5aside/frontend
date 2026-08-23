@@ -8,6 +8,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { isAxiosError } from 'axios';
+import Link from 'next/link';
 import apiClient from '@/lib/api-client';
 import { toast } from 'sonner';
 import { X, Plus, Trash2, Trophy, Clock, Check, Square } from 'lucide-react';
@@ -94,6 +95,7 @@ function trapDialogFocus(event: ReactKeyboardEvent<HTMLElement>, dialog: HTMLEle
 
 interface MatchControllerModalProps {
   matchId: string;
+  enforceCompleteRosterBeforeStart?: boolean;
   onClose: () => void;
   onUpdate: () => void;
 }
@@ -104,17 +106,29 @@ interface EventMutationResult {
   replayed: boolean;
 }
 
+interface SquadLoadErrors {
+  home: string | null;
+  away: string | null;
+}
+
+const EMPTY_SQUAD_LOAD_ERRORS: SquadLoadErrors = { home: null, away: null };
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export default function MatchControllerModal({ matchId, onClose, onUpdate }: MatchControllerModalProps) {
+export default function MatchControllerModal({
+  matchId,
+  enforceCompleteRosterBeforeStart = false,
+  onClose,
+  onUpdate,
+}: MatchControllerModalProps) {
   const [match, setMatch] = useState<Match | null>(null);
   const [homePlayers, setHomePlayers] = useState<Player[]>([]);
   const [awayPlayers, setAwayPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [rosterLoadError, setRosterLoadError] = useState<string | null>(null);
+  const [squadLoadErrors, setSquadLoadErrors] = useState<SquadLoadErrors>(EMPTY_SQUAD_LOAD_ERRORS);
   
   // --- Optimistic local state (decoupled from match object) ---
   const [events, setEvents] = useState<MatchEvent[]>([]);
@@ -157,6 +171,23 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   const knockoutDialogRef = useRef<HTMLDivElement>(null);
   const penaltyDialogRef = useRef<HTMLDivElement>(null);
   const isAssistOpen = Boolean(pendingGoalScorer);
+  const squadsLoaded = !squadLoadErrors.home && !squadLoadErrors.away;
+  const completeRosterReady = squadsLoaded
+    && homePlayers.length > 0
+    && awayPlayers.length > 0;
+  const homeTeamName = match?.homeTeam?.name || 'Home team';
+  const awayTeamName = match?.awayTeam?.name || 'Away team';
+  const squadBlockerMessage = squadLoadErrors.home
+    ? `${homeTeamName}'s tournament squad could not be loaded`
+    : squadLoadErrors.away
+      ? `${awayTeamName}'s tournament squad could not be loaded`
+      : enforceCompleteRosterBeforeStart && homePlayers.length === 0
+        ? `${homeTeamName} has no eligible tournament players`
+        : enforceCompleteRosterBeforeStart && awayPlayers.length === 0
+          ? `${awayTeamName} has no eligible tournament players`
+          : null;
+  const hasSquadBlocker = Boolean(squadBlockerMessage);
+  const rosterReadyForEvents = squadsLoaded;
 
   const fetchPlayers = useCallback(async (
     teamId: string,
@@ -174,7 +205,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   const fetchMatchDetails = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
-    setRosterLoadError(null);
+    setSquadLoadErrors(EMPTY_SQUAD_LOAD_ERRORS);
     try {
       const response = await apiClient.get<ApiResponse<Match[]>, ApiResponse<Match[]>>(
         `/matches?matchId=${encodeURIComponent(matchId)}`,
@@ -197,20 +228,26 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         const tournamentId = typeof m.tournamentId === 'string'
           ? m.tournamentId
           : m.tournamentId?._id || '';
+        const loadSquad = (teamId: string, teamLabel: string) => {
+          if (!teamId) return Promise.reject(new Error(`${teamLabel} is not assigned to this match`));
+          if (!tournamentId) return Promise.reject(new Error('Tournament context is missing from this match'));
+          return fetchPlayers(teamId, tournamentId);
+        };
         const [homeResult, awayResult] = await Promise.allSettled([
-          homeId && tournamentId
-            ? fetchPlayers(homeId, tournamentId)
-            : Promise.resolve([]),
-          awayId && tournamentId
-            ? fetchPlayers(awayId, tournamentId)
-            : Promise.resolve([]),
+          loadSquad(homeId, m.homeTeam?.name || 'The home team'),
+          loadSquad(awayId, m.awayTeam?.name || 'The away team'),
         ]);
 
         setHomePlayers(homeResult.status === 'fulfilled' ? homeResult.value : []);
         setAwayPlayers(awayResult.status === 'fulfilled' ? awayResult.value : []);
-        if (homeResult.status === 'rejected' || awayResult.status === 'rejected') {
-          setRosterLoadError('One or both squads could not be loaded. Retry before recording match events.');
-        }
+        setSquadLoadErrors({
+          home: homeResult.status === 'rejected'
+            ? getErrorMessage(homeResult.reason, 'The tournament squad could not be loaded')
+            : null,
+          away: awayResult.status === 'rejected'
+            ? getErrorMessage(awayResult.reason, 'The tournament squad could not be loaded')
+            : null,
+        });
       } else {
         throw new Error('Match not found');
       }
@@ -256,6 +293,10 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
   // --- OPTIMISTIC EVENT ADD (MAIN GRID) ---
   const handleAddEvent = async (playerId: string, teamId: string) => {
+    if (!rosterReadyForEvents) {
+      toast.error(squadBlockerMessage || 'Both teams need eligible tournament players before events can be recorded');
+      return;
+    }
     if (matchStatus !== 'live' && matchStatus !== 'completed') {
       toast.error('Start or reopen this match before recording events');
       return;
@@ -354,7 +395,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         setAwayScore(resp.data.match.awayScore ?? 0);
         setLastLoggedEventId(resp.data.eventId);
         onUpdate();
-      } else throw new Error();
+      } else {
+        throw new Error(resp.message || 'The event could not be saved');
+      }
     } catch (error: unknown) {
       setEvents(prev => prev.filter(e => e._id !== tempId));
       if (type === 'goal') {
@@ -432,6 +475,15 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
       toast.error('Finish the current match event before changing status');
       return;
     }
+    if (
+      newStatus === 'live'
+      && matchStatus === 'scheduled'
+      && enforceCompleteRosterBeforeStart
+      && !completeRosterReady
+    ) {
+      toast.error(squadBlockerMessage || 'Both teams need eligible tournament players before this match can start');
+      return;
+    }
     const isKnockout = Boolean(match && KNOCKOUT_STAGES.has(match.stage));
     if (newStatus === 'completed' && isKnockout) {
       if (homeScore === awayScore) {
@@ -466,7 +518,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         }
         toast.success(`Match marked as ${newStatus}`);
         onUpdate();
-      } else throw new Error();
+      } else {
+        throw new Error(resp.message || `The match could not be marked as ${newStatus}`);
+      }
     } catch (error: unknown) {
       setMatchStatus(previousStatus);
       toast.error(getErrorMessage(error, 'Failed to update status'));
@@ -591,7 +645,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
   if (isLoading || !match) {
     return (
       <div
-        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 font-outfit backdrop-blur-xl"
+        className="fixed inset-0 z-[60] flex h-[100dvh] items-center justify-center overflow-y-auto overscroll-contain bg-black/80 p-2 font-outfit backdrop-blur-xl sm:p-4"
         onKeyDown={handleDialogKeyDown}
       >
         <div
@@ -601,9 +655,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
           aria-labelledby="match-console-state-title"
           aria-busy={isLoading}
           tabIndex={-1}
-          className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#0a0a0a] p-7 text-center shadow-2xl"
+          className="max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[24px] border border-white/10 bg-[#0a0a0a] p-5 text-center shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-6"
         >
-          <h2 id="match-console-state-title" className="text-xl font-black uppercase italic tracking-tight text-white">
+          <h2 id="match-console-state-title" className="text-base font-black uppercase italic tracking-tight text-white sm:text-lg">
             {isLoading ? 'Loading match console' : 'Match console unavailable'}
           </h2>
           <p className="mt-3 text-xs font-bold leading-relaxed text-neutral-400" role={loadError ? 'alert' : undefined}>
@@ -614,14 +668,14 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
               <button
                 type="button"
                 onClick={() => void fetchMatchDetails()}
-                className="rounded-xl bg-blue-600 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
+                className="min-h-11 rounded-xl bg-blue-600 px-5 text-[10px] font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
               >
                 Try again
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+                className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-5 text-[10px] font-black uppercase tracking-widest text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
               >
                 Close
               </button>
@@ -634,11 +688,11 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
   const filteredHomePlayers = homePlayers.filter(p => p.name.toLowerCase().includes(homeSearch.toLowerCase()));
   const filteredAwayPlayers = awayPlayers.filter(p => p.name.toLowerCase().includes(awaySearch.toLowerCase()));
-  const canLogEvents = matchStatus === 'live' || matchStatus === 'completed';
+  const canLogEvents = rosterReadyForEvents && (matchStatus === 'live' || matchStatus === 'completed');
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 backdrop-blur-xl bg-black/80 font-outfit"
+      className="fixed inset-0 z-[60] flex h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain bg-black/80 p-2 font-outfit backdrop-blur-xl sm:items-center sm:p-4"
       onKeyDown={handleDialogKeyDown}
     >
       <div
@@ -648,7 +702,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         aria-labelledby="match-console-title"
         aria-busy={isStatusUpdating || isEventUpdating}
         tabIndex={-1}
-        className="w-full max-w-6xl h-[98vh] sm:h-[90vh] bg-[#0a0a0a] border border-white/10 rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_0_100px_rgba(37,99,235,0.1)] animate-in fade-in zoom-in duration-200 flex flex-col relative"
+        className="relative flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-full max-w-6xl flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#0a0a0a] shadow-[0_0_100px_rgba(37,99,235,0.1)] animate-in fade-in zoom-in duration-200 sm:h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px] lg:h-[90dvh] lg:max-h-[56rem]"
       >
         
         {/* Glow Effects */}
@@ -657,13 +711,13 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         }`} />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between p-3 sm:p-6 border-b border-white/5 bg-white/[0.02] gap-3 shrink-0">
+        <div className="flex shrink-0 flex-col gap-2 border-b border-white/5 bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="h-8 w-8 sm:h-12 sm:w-12 rounded-xl bg-blue-600/10 flex items-center justify-center border border-blue-500/20 shrink-0">
-                <Trophy className="h-4 w-4 sm:h-6 sm:w-6 text-blue-500" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-600/10 sm:h-10 sm:w-10">
+                <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
               </div>
               <div className="min-w-0">
-                <h2 id="match-console-title" className="text-sm sm:text-2xl font-black italic uppercase tracking-tighter text-white truncate">Match Console</h2>
+                <h2 id="match-console-title" className="truncate text-sm font-black italic uppercase tracking-tighter text-white sm:text-xl">Match Console</h2>
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full ${matchStatus === 'live' ? 'bg-red-500 animate-pulse' : 'bg-neutral-600'}`}></span>
                   <p className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-neutral-500 truncate">
@@ -674,16 +728,18 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
            </div>
 
            {/* Match Status Controls */}
-           <div className="flex items-center gap-1.5 sm:gap-2">
-              <div className="flex items-center bg-white/5 rounded-xl p-0.5 sm:p-1 border border-white/5">
+           <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-end sm:gap-2">
+              <div className="flex flex-wrap items-center rounded-xl border border-white/5 bg-white/5 p-0.5">
                 {matchStatus === 'scheduled' && (
                   <>
                     <button
                       type="button"
-                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo) || !match.date || !match.venue}
-                      title={!match.date || !match.venue ? 'Add the physically confirmed kickoff and venue before starting this match' : undefined}
+                      disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo) || !match.date || !match.venue || (enforceCompleteRosterBeforeStart && !completeRosterReady)}
+                      title={!match.date || !match.venue
+                        ? 'Add the physically confirmed kickoff and venue before starting this match'
+                        : enforceCompleteRosterBeforeStart ? squadBlockerMessage || undefined : undefined}
                       onClick={() => void handleStatusUpdate('live')}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-green-600/10 text-green-500 hover:bg-green-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
+                      className="min-h-11 rounded-lg bg-green-600/10 px-3 text-[9px] font-black uppercase tracking-widest text-green-500 transition-all hover:bg-green-600 hover:text-white disabled:opacity-40 sm:px-4 sm:text-[10px]"
                     >
                       Start
                     </button>
@@ -691,7 +747,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       type="button"
                       disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
                       onClick={handleCancelMatch}
-                      className="px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-red-400 disabled:opacity-40"
+                      className="min-h-11 px-2.5 text-[9px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-red-400 disabled:opacity-40"
                     >
                       Cancel
                     </button>
@@ -703,7 +759,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       type="button"
                       disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
                       onClick={() => void handleStatusUpdate('completed')}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
+                      className="min-h-11 rounded-lg bg-red-600/10 px-3 text-[9px] font-black uppercase tracking-widest text-red-500 transition-all hover:bg-red-600 hover:text-white disabled:opacity-40 sm:px-4 sm:text-[10px]"
                     >
                       End Match
                     </button>
@@ -711,7 +767,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       type="button"
                       disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
                       onClick={handleCancelMatch}
-                      className="px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-red-400 disabled:opacity-40"
+                      className="min-h-11 px-2.5 text-[9px] font-black uppercase tracking-widest text-neutral-500 transition-colors hover:text-red-400 disabled:opacity-40"
                     >
                       Cancel
                     </button>
@@ -722,7 +778,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                     type="button"
                     disabled={isStatusUpdating || isEventUpdating || Boolean(pendingGoalInfo)}
                     onClick={handleReopenForCorrection}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500 hover:text-black transition-all whitespace-nowrap disabled:opacity-40"
+                    className="min-h-11 rounded-lg bg-yellow-500/10 px-3 text-[9px] font-black uppercase tracking-widest text-yellow-400 transition-all hover:bg-yellow-500 hover:text-black disabled:opacity-40 sm:px-4 sm:text-[10px]"
                   >
                     Reopen
                   </button>
@@ -732,7 +788,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                     type="button"
                     disabled={isStatusUpdating || isEventUpdating}
                     onClick={() => void handleStatusUpdate('scheduled')}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap disabled:opacity-40"
+                    className="min-h-11 rounded-lg bg-blue-600/10 px-3 text-[9px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white disabled:opacity-40 sm:px-4 sm:text-[10px]"
                   >
                     Restore
                   </button>
@@ -743,7 +799,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                 disabled={isAssistOpen || isStatusUpdating || isEventUpdating}
                 onClick={onClose}
                 aria-label={isAssistOpen ? 'Finish choosing an assist before closing the match console' : 'Close match console'}
-                className="h-8 w-8 sm:h-11 sm:w-11 rounded-full bg-white/5 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 transition-all border border-white/5 shrink-0 disabled:cursor-not-allowed disabled:opacity-30"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/5 bg-white/5 text-neutral-400 transition-all hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
@@ -751,15 +807,15 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
         </div>
 
         {/* Split UI: Action & Grid | Timeline */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:flex-row">
            
            {/* Mobile Tab Toggle (Persistent) */}
-           <div className="flex md:hidden p-1 bg-white/5 border-b border-white/5 shrink-0">
+            <div className="sticky top-0 z-30 flex shrink-0 border-b border-white/5 bg-[#0a0a0a] p-1 md:hidden">
               <button 
                 type="button"
                 disabled={isAssistOpen}
                 onClick={() => setActiveTeamTab('home')} 
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'home' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
+                className={`min-h-11 flex-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'home' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
               >
                 HOME
               </button>
@@ -767,7 +823,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                 type="button"
                 disabled={isAssistOpen}
                 onClick={() => setActiveTeamTab('away')} 
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'away' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
+                className={`min-h-11 flex-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'away' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
               >
                 AWAY
               </button>
@@ -775,31 +831,71 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                 type="button"
                 disabled={isAssistOpen}
                 onClick={() => setActiveTeamTab('timeline')} 
-                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'timeline' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
+                className={`min-h-11 flex-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-40 ${activeTeamTab === 'timeline' ? 'bg-blue-600 text-white shadow-lg' : 'text-neutral-500'}`}
               >
                  LOG
               </button>
            </div>
           
            {/* LEFT: Grid Console */}
-           <div className={`flex-1 flex flex-col overflow-hidden ${activeTeamTab === 'timeline' ? 'hidden md:flex' : 'flex'}`}>
-             {rosterLoadError && (
-               <div className="flex flex-col gap-2 border-b border-yellow-500/20 bg-yellow-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
-                 <p className="text-[9px] font-black uppercase tracking-widest text-yellow-200">{rosterLoadError}</p>
-                 <button
-                   type="button"
-                   disabled={isLoading}
-                   onClick={() => void fetchMatchDetails()}
-                   className="self-start text-[9px] font-black uppercase tracking-widest text-white underline underline-offset-4 disabled:opacity-40 sm:self-auto"
-                 >
-                   Retry squads
-                 </button>
-               </div>
+            <div className={`min-h-0 flex-col md:min-h-[32rem] md:flex-1 ${activeTeamTab === 'timeline' ? 'hidden md:flex' : 'flex'}`}>
+             {hasSquadBlocker && (
+               <section className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-3 sm:px-4" role="alert" aria-labelledby="squad-blocker-title">
+                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                   <div className="min-w-0">
+                     <h3 id="squad-blocker-title" className="text-[10px] font-black uppercase tracking-widest text-amber-100">
+                        {enforceCompleteRosterBeforeStart
+                          ? 'Both tournament squads are required'
+                          : 'Tournament squads could not be loaded'}
+                     </h3>
+                     <div className="mt-2 space-y-2 text-xs font-semibold leading-relaxed text-amber-50/80">
+                       {squadLoadErrors.home ? (
+                         <p><span className="font-black text-white">{homeTeamName}:</span> squad load failed — {squadLoadErrors.home}</p>
+                        ) : enforceCompleteRosterBeforeStart && homePlayers.length === 0 ? (
+                         <p><span className="font-black text-white">{homeTeamName}:</span> no eligible players are registered for this tournament.</p>
+                       ) : null}
+                       {squadLoadErrors.away ? (
+                         <p><span className="font-black text-white">{awayTeamName}:</span> squad load failed — {squadLoadErrors.away}</p>
+                        ) : enforceCompleteRosterBeforeStart && awayPlayers.length === 0 ? (
+                         <p><span className="font-black text-white">{awayTeamName}:</span> no eligible players are registered for this tournament.</p>
+                       ) : null}
+                     </div>
+                   </div>
+                   <div className="flex flex-wrap gap-2">
+                     {squadLoadErrors.home || squadLoadErrors.away ? (
+                       <button
+                         type="button"
+                         disabled={isLoading}
+                         onClick={() => void fetchMatchDetails()}
+                         className="inline-flex min-h-11 items-center rounded-xl border border-white/15 bg-white/10 px-3 text-[9px] font-black uppercase tracking-widest text-white transition-colors hover:bg-white/15 disabled:opacity-40"
+                       >
+                         Retry squads
+                       </button>
+                     ) : null}
+                      {enforceCompleteRosterBeforeStart && !squadLoadErrors.home && homePlayers.length === 0 ? (
+                       <Link
+                         href={`/admin/teams/${encodeURIComponent(match.homeTeam._id)}/squad`}
+                         className="inline-flex min-h-11 items-center rounded-xl bg-white px-3 text-[9px] font-black uppercase tracking-widest text-black transition-colors hover:bg-amber-100"
+                       >
+                         Open {homeTeamName} squad
+                       </Link>
+                     ) : null}
+                      {enforceCompleteRosterBeforeStart && !squadLoadErrors.away && awayPlayers.length === 0 ? (
+                       <Link
+                         href={`/admin/teams/${encodeURIComponent(match.awayTeam._id)}/squad`}
+                         className="inline-flex min-h-11 items-center rounded-xl bg-white px-3 text-[9px] font-black uppercase tracking-widest text-black transition-colors hover:bg-amber-100"
+                       >
+                         Open {awayTeamName} squad
+                       </Link>
+                     ) : null}
+                   </div>
+                 </div>
+               </section>
              )}
             
              {/* ACTION ZONE: Mode & Minute */}
-             <div className="p-3 sm:p-6 bg-white/[0.01] border-b border-white/5 shrink-0">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-10">
+              <div className="shrink-0 border-b border-white/5 bg-white/[0.01] p-3 sm:p-4">
+                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
                   
                   {/* 1. Mode Selector */}
                   <div className="flex bg-white/5 p-1 rounded-[16px] sm:rounded-2xl border border-white/5 flex-1 max-w-sm">
@@ -811,9 +907,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                       <button
                         key={mode.type}
                         type="button"
-                        disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo)}
+                        disabled={!canLogEvents || isEventUpdating || Boolean(pendingGoalInfo)}
                         onClick={() => setEventMode(mode.type as typeof eventMode)}
-                        className={`flex-1 flex items-center justify-center gap-2 px-2 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${
+                        className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-2 text-[10px] font-black uppercase tracking-wider transition-all sm:rounded-xl sm:px-3 sm:text-[11px] ${
                           eventMode === mode.type 
                           ? mode.type === 'goal' ? 'bg-blue-600 text-white shadow-lg' :
                              mode.type === 'yellow_card' ? 'bg-yellow-500 text-black shadow-lg' :
@@ -830,8 +926,8 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                   {/* 2. Minute Controller */}
                   <div className="flex items-center justify-center lg:justify-start gap-4 sm:gap-6">
                      <div className="flex items-center gap-1">
-                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo)} onClick={() => setCurrentMinute(Math.max(0, currentMinute - 5))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">-5</button>
-                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo)} onClick={() => setCurrentMinute(Math.max(0, currentMinute - 1))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">-1</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(pendingGoalInfo)} onClick={() => setCurrentMinute(Math.max(0, currentMinute - 5))} className="h-11 w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">-5</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(pendingGoalInfo)} onClick={() => setCurrentMinute(Math.max(0, currentMinute - 1))} className="h-11 w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">-1</button>
                      </div>
                      
                      <div className="relative">
@@ -844,18 +940,18 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      </div>
 
                      <div className="flex items-center gap-1">
-                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo) || currentMinute >= 120} onClick={() => setCurrentMinute(Math.min(120, currentMinute + 1))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">+1</button>
-                        <button type="button" disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo) || currentMinute >= 120} onClick={() => setCurrentMinute(Math.min(120, currentMinute + 5))} className="h-8 w-10 sm:h-11 sm:w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">+5</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(pendingGoalInfo) || currentMinute >= 120} onClick={() => setCurrentMinute(Math.min(120, currentMinute + 1))} className="h-11 w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">+1</button>
+                        <button type="button" disabled={!canLogEvents || Boolean(pendingGoalInfo) || currentMinute >= 120} onClick={() => setCurrentMinute(Math.min(120, currentMinute + 5))} className="h-11 w-11 rounded-xl bg-white/5 text-neutral-500 hover:text-white border border-white/5 text-[9px] font-black disabled:opacity-40">+5</button>
                      </div>
                   </div>
 
                   {/* 3. Settings */}
-                  <div className="flex items-center justify-center lg:justify-end gap-6 sm:gap-8 ml-auto">
+                  <div className="ml-auto flex items-center justify-center gap-4 lg:justify-end sm:gap-6">
                      <button 
                        type="button"
-                       disabled={!canLogEvents || Boolean(rosterLoadError) || Boolean(pendingGoalInfo)}
+                       disabled={!canLogEvents || Boolean(pendingGoalInfo)}
                        onClick={() => setAutoAdvance(!autoAdvance)}
-                       className="group flex flex-col items-center gap-1"
+                       className="group flex min-h-11 min-w-11 flex-col items-center justify-center gap-1"
                      >
                         <span className="text-[8px] font-black uppercase tracking-widest text-neutral-600 transition-colors group-hover:text-blue-500">Auto +1m</span>
                         <div className={`h-4 w-9 rounded-full p-0.5 transition-all ${autoAdvance ? 'bg-blue-600' : 'bg-neutral-800'}`}>
@@ -866,9 +962,9 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      {lastLoggedEventId && (
                        <button 
                          type="button"
-                         disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo)}
+                         disabled={!canLogEvents || isEventUpdating || Boolean(pendingGoalInfo)}
                          onClick={() => void handleDeleteEvent(lastLoggedEventId)}
-                         className="flex flex-col items-center gap-1 group disabled:opacity-40"
+                         className="group flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 disabled:opacity-40"
                        >
                           <span className="text-[8px] font-black uppercase tracking-widest text-neutral-600 group-hover:text-red-500">Undo</span>
                           <div className="h-8 w-8 sm:h-11 sm:w-11 rounded-xl bg-red-600/10 border border-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all shadow-lg group-hover:shadow-red-600/20">
@@ -881,67 +977,8 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
              </div>
 
              {/* ROSTER GRID ZONE */}
-             <div className="flex-1 overflow-hidden flex flex-col sm:flex-row relative">
+               <div className="relative flex min-h-[18rem] flex-none flex-col sm:flex-row md:min-h-0 md:flex-1 md:overflow-hidden">
                 
-                {/* Assist Overlay */}
-                {pendingGoalScorer && (
-                  <div className="absolute inset-x-0 bottom-0 z-50 animate-in slide-in-from-bottom duration-300">
-                     <div
-                       ref={assistDialogRef}
-                       role="dialog"
-                       aria-modal="true"
-                       aria-labelledby="assist-dialog-title"
-                       aria-describedby="assist-dialog-description"
-                       aria-busy={isEventUpdating}
-                       tabIndex={-1}
-                       className="mx-auto max-w-2xl bg-blue-600 rounded-t-[24px] sm:rounded-t-[32px] p-4 sm:p-6 shadow-2xl border-x border-t border-white/20"
-                     >
-                        <div className="flex items-center justify-between mb-4 sm:mb-6">
-                           <div>
-                             <p className="text-[9px] font-black text-blue-100 uppercase tracking-widest">Goal pending</p>
-                              <h4 id="assist-dialog-title" className="text-sm sm:text-xl font-black text-white italic uppercase tracking-tighter">Who provided the assist?</h4>
-                              <p id="assist-dialog-description" className="sr-only">Choose an assisting player, record no assist, or cancel this pending goal.</p>
-                           </div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                data-dialog-autofocus="true"
-                                disabled={isEventUpdating}
-                                onClick={() => pendingGoalInfo && void handleDeleteEvent(pendingGoalInfo.tempId)}
-                                className="px-3 py-1.5 rounded-lg border border-white/20 text-blue-100 text-[9px] font-black uppercase tracking-widest hover:bg-black/10 disabled:opacity-40"
-                              >
-                                Cancel goal
-                              </button>
-                            <button
-                              type="button"
-                              disabled={isEventUpdating}
-                              onClick={() => void handleFinalizeGoal()}
-                              className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40"
-                            >
-                              Skip
-                            </button>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                           {(homePlayers.some(p => p._id === pendingGoalScorer?._id) ? homePlayers : awayPlayers)
-                             .filter(p => p._id !== pendingGoalScorer?._id)
-                             .map(player => (
-                             <button
-                               key={player._id}
-                               type="button"
-                               disabled={isEventUpdating}
-                               onClick={() => void handleFinalizeGoal(player._id)}
-                               className="p-2 sm:p-3 rounded-xl bg-white/10 hover:bg-white text-white hover:text-blue-600 transition-all text-center min-w-0"
-                             >
-                                <span className="text-[9px] sm:text-[10px] font-black uppercase truncate block">{player.name}</span>
-                             </button>
-                           ))}
-                        </div>
-                     </div>
-                  </div>
-                )}
-
-
                 {/* Home Team Column */}
                 <div className={`flex-1 flex flex-col border-r border-white/5 min-w-0 ${activeTeamTab === 'home' ? 'flex' : 'hidden md:flex'}`}>
                    <div className="p-3 sm:p-4 border-b border-white/5 bg-blue-600/5">
@@ -955,15 +992,15 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                          disabled={isAssistOpen}
                          value={homeSearch}
                          onChange={(e) => setHomeSearch(e.target.value)}
-                         className="w-full h-8 sm:h-10 bg-black/40 border border-white/10 rounded-lg sm:rounded-xl px-3 text-[10px] sm:text-xs text-white focus:outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                         className="h-11 w-full rounded-lg border border-white/10 bg-black/40 px-3 text-base text-white focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-xl [@media(pointer:fine)]:text-sm"
                       />
                    </div>
-                   <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 auto-rows-max">
+                     <div className="grid flex-none auto-rows-max grid-cols-2 gap-1.5 p-2 sm:gap-2 sm:p-3 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain lg:grid-cols-2 xl:grid-cols-3">
                       {filteredHomePlayers.map(p => (
                          <button
                            key={p._id}
                            type="button"
-                           disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
+                           disabled={!canLogEvents || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
                            onClick={() => void handleAddEvent(p._id, match.homeTeam._id)}
                            className={`group relative p-2 sm:p-4 rounded-xl sm:rounded-2xl border transition-all text-left overflow-hidden min-h-[60px] sm:min-h-[80px] flex flex-col justify-end ${
                              flashPlayerId === p._id ? 'bg-green-500 border-green-400 scale-95' :
@@ -995,15 +1032,15 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                          disabled={isAssistOpen}
                          value={awaySearch}
                          onChange={(e) => setAwaySearch(e.target.value)}
-                         className="w-full h-8 sm:h-10 bg-black/40 border border-white/10 rounded-lg sm:rounded-xl px-3 text-[10px] sm:text-xs text-white focus:outline-none focus:border-red-500 disabled:cursor-not-allowed disabled:opacity-40"
+                         className="h-11 w-full rounded-lg border border-white/10 bg-black/40 px-3 text-base text-white focus:border-red-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-xl [@media(pointer:fine)]:text-sm"
                       />
                    </div>
-                   <div className="flex-1 overflow-y-auto p-2 sm:p-4 grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 auto-rows-max">
+                     <div className="grid flex-none auto-rows-max grid-cols-2 gap-1.5 p-2 sm:gap-2 sm:p-3 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain lg:grid-cols-2 xl:grid-cols-3">
                       {filteredAwayPlayers.map(p => (
                          <button
                            key={p._id}
                            type="button"
-                           disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
+                           disabled={!canLogEvents || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
                            onClick={() => void handleAddEvent(p._id, match.awayTeam._id)}
                            className={`group relative p-2 sm:p-4 rounded-xl sm:rounded-2xl border transition-all text-left overflow-hidden min-h-[60px] sm:min-h-[80px] flex flex-col justify-end ${
                              flashPlayerId === p._id ? 'bg-green-500 border-green-400 scale-95' :
@@ -1025,8 +1062,8 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
            </div>
 
            {/* RIGHT: Timeline Sidebar */}
-           <div className={`w-full md:w-[280px] lg:w-[400px] border-l border-white/5 bg-white/[0.01] flex flex-col shrink-0 overflow-hidden ${activeTeamTab === 'timeline' ? 'flex' : 'hidden md:flex'}`}>
-              <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between shrink-0">
+            <div className={`min-h-[20rem] w-full shrink-0 flex-col overflow-hidden border-l border-white/5 bg-white/[0.01] md:min-h-0 md:w-[280px] lg:w-[360px] ${activeTeamTab === 'timeline' ? 'flex' : 'hidden md:flex'}`}>
+               <div className="flex shrink-0 items-center justify-between border-b border-white/5 p-4">
                  <div>
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Live Log</h3>
                     <div className="flex items-center gap-2 mt-1">
@@ -1071,10 +1108,10 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                          {!ev._id.startsWith('temp_') && (
                            <button 
                              type="button"
-                             disabled={!canLogEvents || Boolean(rosterLoadError) || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
+                             disabled={!canLogEvents || isEventUpdating || Boolean(pendingGoalInfo) || isStatusUpdating}
                              onClick={() => void handleDeleteEvent(ev._id)}
                              aria-label={`Delete ${ev.type.replace('_', ' ')} by ${ev.playerId?.name ?? 'player'}`}
-                             className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all hover:bg-red-500 hover:text-white border border-red-500/20 disabled:opacity-20"
+                             className="flex h-11 w-11 items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-500 opacity-100 transition-all hover:bg-red-500 hover:text-white focus:opacity-100 disabled:opacity-20 md:opacity-0 md:group-hover:opacity-100"
                            >
                               <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                            </button>
@@ -1085,7 +1122,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
               </div>
 
               {/* Footer Score Display */}
-              <div className="p-4 sm:p-6 border-t border-white/5 bg-black/40 shrink-0">
+               <div className="shrink-0 border-t border-white/5 bg-black/40 p-4">
                  <div className="flex items-center justify-between">
                     <div className="text-center">
                        <p className="text-[8px] font-black uppercase text-neutral-600 mb-0.5 sm:mb-1">{match.homeTeam?.name?.slice(0, 3)}</p>
@@ -1099,11 +1136,69 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                  </div>
               </div>
            </div>
-        </div>
+         </div>
+
+        {/* Assist selection stays anchored to the visible console viewport. */}
+        {pendingGoalScorer && (
+          <div className="absolute inset-0 z-[70] flex items-end overflow-y-auto overscroll-contain bg-black/60 p-2 backdrop-blur-sm animate-in slide-in-from-bottom duration-300 sm:p-4">
+             <div
+               ref={assistDialogRef}
+               role="dialog"
+               aria-modal="true"
+               aria-labelledby="assist-dialog-title"
+               aria-describedby="assist-dialog-description"
+               aria-busy={isEventUpdating}
+               tabIndex={-1}
+               className="mx-auto max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain rounded-[20px] border border-white/20 bg-blue-600 p-3 shadow-2xl sm:rounded-[28px] sm:p-5"
+              >
+                 <div className="mb-3 flex flex-col gap-3 sm:mb-5 sm:flex-row sm:items-center sm:justify-between">
+                   <div>
+                     <p className="text-[9px] font-black uppercase tracking-widest text-blue-100">Goal pending</p>
+                     <h4 id="assist-dialog-title" className="text-sm font-black italic uppercase tracking-tighter text-white sm:text-xl">Who provided the assist?</h4>
+                     <p id="assist-dialog-description" className="sr-only">Choose an assisting player, record no assist, or cancel this pending goal.</p>
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <button
+                       type="button"
+                       data-dialog-autofocus="true"
+                       disabled={isEventUpdating}
+                       onClick={() => pendingGoalInfo && void handleDeleteEvent(pendingGoalInfo.tempId)}
+                       className="min-h-11 rounded-lg border border-white/20 px-3 text-[9px] font-black uppercase tracking-widest text-blue-100 hover:bg-black/10 disabled:opacity-40"
+                     >
+                       Cancel goal
+                     </button>
+                     <button
+                       type="button"
+                       disabled={isEventUpdating}
+                       onClick={() => void handleFinalizeGoal()}
+                       className="min-h-11 rounded-lg bg-white/10 px-4 text-[9px] font-black uppercase tracking-widest text-white hover:bg-white/20 disabled:opacity-40"
+                     >
+                       Skip
+                     </button>
+                   </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                   {(homePlayers.some(p => p._id === pendingGoalScorer?._id) ? homePlayers : awayPlayers)
+                     .filter(p => p._id !== pendingGoalScorer?._id)
+                     .map(player => (
+                       <button
+                         key={player._id}
+                         type="button"
+                         disabled={isEventUpdating}
+                         onClick={() => void handleFinalizeGoal(player._id)}
+                         className="min-h-11 min-w-0 rounded-xl bg-white/10 p-2 text-center text-white transition-all hover:bg-white hover:text-blue-600 sm:p-3"
+                       >
+                         <span className="block truncate text-[9px] font-black uppercase sm:text-[10px]">{player.name}</span>
+                       </button>
+                     ))}
+                 </div>
+             </div>
+          </div>
+        )}
 
         {/* KNOCKOUT RESOLVE DIALOG */}
         {showKnockoutResolve && (
-          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="absolute inset-0 z-[70] flex items-start justify-center overflow-y-auto overscroll-contain bg-black/60 p-2 backdrop-blur-sm sm:items-center sm:p-4">
              <div
                ref={knockoutDialogRef}
                role="dialog"
@@ -1112,13 +1207,13 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                aria-describedby="knockout-resolution-score"
                aria-busy={isStatusUpdating}
                tabIndex={-1}
-               className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[32px] p-6 sm:p-8 shadow-2xl animate-in zoom-in-95 duration-200"
+               className="max-h-full w-full max-w-md overflow-y-auto overscroll-contain rounded-[24px] border border-white/10 bg-[#0a0a0a] p-4 shadow-2xl animate-in zoom-in-95 duration-200 sm:rounded-[28px] sm:p-6"
              >
-                <div className="text-center mb-6 sm:mb-8">
-                   <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
-                      <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
+                <div className="mb-5 text-center sm:mb-6">
+                   <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/20 bg-amber-500/10 sm:h-12 sm:w-12">
+                      <Clock className="h-5 w-5 text-amber-500 sm:h-6 sm:w-6" />
                    </div>
-                   <h3 id="knockout-resolution-title" className="text-xl sm:text-2xl font-black italic tracking-tighter text-white uppercase">Match Level</h3>
+                   <h3 id="knockout-resolution-title" className="text-lg font-black italic uppercase tracking-tighter text-white sm:text-xl">Match Level</h3>
                    <p id="knockout-resolution-score" className="text-[9px] sm:text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-2">{match.homeTeam.name} {homeScore} - {awayScore} {match.awayTeam.name}</p>
                 </div>
 
@@ -1127,7 +1222,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      type="button"
                      data-dialog-autofocus="true"
                      onClick={() => { setIsExtraTime(true); setShowKnockoutResolve(false); }}
-                     className="w-full p-4 sm:p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/40 hover:bg-blue-600/5 transition-all text-left flex items-center justify-between group"
+                     className="group flex min-h-11 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:border-blue-500/40 hover:bg-blue-600/5 sm:p-5"
                    >
                       <div>
                          <p className="text-xs sm:text-sm font-black text-white uppercase">Approved Extra Time</p>
@@ -1139,7 +1234,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                    <button 
                      type="button"
                      onClick={() => { setShowPenaltyPanel(true); setShowKnockoutResolve(false); }}
-                     className="w-full p-4 sm:p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-amber-500/40 hover:bg-amber-600/5 transition-all text-left flex items-center justify-between group"
+                     className="group flex min-h-11 w-full items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:border-amber-500/40 hover:bg-amber-600/5 sm:p-5"
                    >
                       <div>
                          <p className="text-xs sm:text-sm font-black text-white uppercase">Penalties</p>
@@ -1151,7 +1246,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                    <button 
                      type="button"
                      onClick={() => setShowKnockoutResolve(false)}
-                     className="w-full py-2 text-[10px] font-black text-neutral-600 uppercase tracking-widest hover:text-white transition-colors"
+                     className="min-h-11 w-full text-[10px] font-black uppercase tracking-widest text-neutral-600 transition-colors hover:text-white"
                    >
                      Cancel
                    </button>
@@ -1162,7 +1257,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
         {/* PENALTY SHOOTOUT PANEL */}
         {showPenaltyPanel && (
-          <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <div className="absolute inset-0 z-[80] flex items-start justify-center overflow-y-auto overscroll-contain bg-black/80 p-2 backdrop-blur-md sm:items-center sm:p-4">
              <div
                ref={penaltyDialogRef}
                role="dialog"
@@ -1170,16 +1265,16 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                aria-labelledby="penalty-shootout-title"
                aria-busy={isStatusUpdating}
                tabIndex={-1}
-               className="w-full max-w-xl bg-black border border-white/10 rounded-[32px] sm:rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(245,158,11,0.2)] animate-in slide-in-from-bottom-8 duration-300"
+               className="max-h-full w-full max-w-xl overflow-y-auto overscroll-contain rounded-[24px] border border-white/10 bg-black p-4 shadow-[0_0_100px_rgba(245,158,11,0.2)] animate-in slide-in-from-bottom-8 duration-300 sm:rounded-[32px] sm:p-7"
              >
-                <div className="text-center mb-8 sm:mb-12">
+                <div className="mb-5 text-center sm:mb-7">
                    <div className="inline-flex px-3 sm:px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mb-4">
                       Goalmouth Showdown
                    </div>
-                   <h3 id="penalty-shootout-title" className="text-2xl sm:text-4xl font-black italic tracking-tighter text-white uppercase">Penalty Shootout</h3>
+                   <h3 id="penalty-shootout-title" className="text-xl font-black italic uppercase tracking-tighter text-white sm:text-2xl">Penalty Shootout</h3>
                 </div>
 
-                <div className="flex items-center justify-between gap-4 sm:gap-8 mb-8 sm:mb-12">
+                <div className="mb-5 flex items-center justify-between gap-3 sm:mb-7 sm:gap-6">
                    <div className="flex-1 text-center space-y-3 sm:space-y-4">
                       <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center mx-auto text-sm sm:text-lg font-black italic text-neutral-400 uppercase">{match.homeTeam.name.charAt(0)}</div>
                       <p className="text-[8px] sm:text-[10px] font-black text-neutral-500 uppercase truncate">{match.homeTeam.name}</p>
@@ -1192,11 +1287,11 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         aria-label={`${match.homeTeam.name} penalty shootout score`}
                         value={shootoutScore.home}
                         onChange={(e) => setShootoutScore({ ...shootoutScore, home: parseInt(e.target.value) || 0 })}
-                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all disabled:cursor-wait disabled:opacity-50"
+                        className="w-full rounded-2xl border-2 border-white/10 bg-white/5 p-3 text-center text-2xl font-black italic text-white transition-all focus:border-amber-500 focus:outline-none disabled:cursor-wait disabled:opacity-50 sm:rounded-3xl sm:p-4 sm:text-3xl"
                       />
                    </div>
 
-                   <div className="text-xl sm:text-2xl font-black italic text-neutral-700 pt-12 sm:pt-16 uppercase italic">VS</div>
+                    <div className="pt-10 text-sm font-black italic uppercase text-neutral-700 sm:pt-12 sm:text-lg">VS</div>
 
                    <div className="flex-1 text-center space-y-3 sm:space-y-4">
                       <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center mx-auto text-sm sm:text-lg font-black italic text-neutral-400 uppercase">{match.awayTeam.name.charAt(0)}</div>
@@ -1209,7 +1304,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         aria-label={`${match.awayTeam.name} penalty shootout score`}
                         value={shootoutScore.away}
                         onChange={(e) => setShootoutScore({ ...shootoutScore, away: parseInt(e.target.value) || 0 })}
-                        className="w-full bg-white/5 border-2 border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-3xl sm:text-6xl font-black italic text-center text-white focus:outline-none focus:border-amber-500 transition-all font-outfit disabled:cursor-wait disabled:opacity-50"
+                        className="w-full rounded-2xl border-2 border-white/10 bg-white/5 p-3 text-center text-2xl font-black italic text-white transition-all focus:border-amber-500 focus:outline-none disabled:cursor-wait disabled:opacity-50 sm:rounded-3xl sm:p-4 sm:text-3xl"
                       />
                    </div>
                 </div>
@@ -1226,7 +1321,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         const winnerId = shootoutScore.home > shootoutScore.away ? match.homeTeam._id : match.awayTeam._id;
                         handleSetWinner(winnerId, shootoutScore);
                       }}
-                      className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-amber-500 text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-amber-400 active:scale-95 transition-all shadow-xl shadow-amber-500/20 disabled:cursor-wait disabled:opacity-50"
+                      className="col-span-2 h-12 rounded-xl bg-amber-500 text-[10px] font-black uppercase tracking-widest text-black shadow-xl shadow-amber-500/20 transition-all hover:bg-amber-400 active:scale-95 disabled:cursor-wait disabled:opacity-50 sm:col-span-1 sm:h-14 sm:rounded-2xl sm:text-[11px]"
                    >
                       Confirm Winner
                    </button>
@@ -1237,7 +1332,7 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                         setShowPenaltyPanel(false);
                         setShowKnockoutResolve(true);
                       }}
-                      className="col-span-2 sm:col-span-1 h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-neutral-400 text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:cursor-wait disabled:opacity-50"
+                      className="col-span-2 h-12 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-neutral-400 transition-all hover:bg-white/10 disabled:cursor-wait disabled:opacity-50 sm:col-span-1 sm:h-14 sm:rounded-2xl sm:text-[11px]"
                    >
                       Back
                    </button>
@@ -1248,8 +1343,8 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
 
         {/* REGULAR KNOCKOUT WINNER (IF NOT LEVEL) */}
         {matchStatus === 'live' && KNOCKOUT_STAGES.has(match.stage) && homeScore !== awayScore && (
-          <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 animate-in fade-in slide-in-from-right-4 duration-500">
-             <div className="bg-[#0a0a0a]/90 backdrop-blur-xl border border-blue-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-2xl flex items-center gap-3 sm:gap-4">
+          <div className="absolute inset-x-2 bottom-2 z-40 animate-in fade-in slide-in-from-right-4 duration-500 sm:inset-x-auto sm:bottom-6 sm:right-6">
+             <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-[#0a0a0a]/90 p-3 shadow-2xl backdrop-blur-xl sm:gap-4 sm:rounded-2xl sm:p-4">
                 <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-blue-600/20 flex items-center justify-center border border-blue-500/20">
                    <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                 </div>
@@ -1259,12 +1354,13 @@ export default function MatchControllerModal({ matchId, onClose, onUpdate }: Mat
                      {homeScore > awayScore ? match.homeTeam.name : match.awayTeam.name}
                    </p>
                 </div>
-                <button 
+                <button
+                   type="button"
                    onClick={() => {
                      const winnerId = homeScore > awayScore ? match.homeTeam._id : match.awayTeam._id;
                      handleSetWinner(winnerId);
                    }}
-                   className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-blue-600 text-white text-[8px] sm:text-[9px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all"
+                   className="min-h-11 rounded-lg bg-blue-600 px-3 text-[8px] font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 sm:px-4 sm:text-[9px]"
                 >
                    Finalize
                 </button>

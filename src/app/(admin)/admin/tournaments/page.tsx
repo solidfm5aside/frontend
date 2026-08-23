@@ -112,7 +112,7 @@ function TournamentCard({
   const allCurrentStageDone = stageProgress ? stageProgress.completed === stageProgress.total && stageProgress.total > 0 : false;
 
   return (
-    <div className="group rounded-[30px] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-3xl transition-all hover:bg-white/[0.04] hover:border-blue-500/20 relative overflow-hidden">
+    <div className="group relative overflow-hidden rounded-[28px] border border-white/5 bg-white/[0.02] p-6 backdrop-blur-3xl transition-all hover:border-blue-500/20 hover:bg-white/[0.04]">
       <div className="relative z-10 flex justify-between items-start mb-6">
         <div>
           <span className={`inline-flex px-3 py-1 mb-4 rounded-full text-[9px] font-black uppercase tracking-widest border ${
@@ -122,12 +122,12 @@ function TournamentCard({
           }`}>
             {tournament.status === 'ongoing' ? '🔴 Live' : tournament.status === 'upcoming' ? '⏳ Pending' : '🏆 Archived'}
           </span>
-          <h3 className="text-2xl font-black italic tracking-tighter text-white uppercase">{tournament.name}</h3>
+          <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">{tournament.name}</h3>
           <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mt-1">
             Season {tournament.season} • {new Date(tournament.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
           </p>
         </div>
-        <div className="h-16 w-16 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center justify-center text-2xl">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] text-xl">
           {tournament.status === 'completed' ? '🏆' : tournament.status === 'ongoing' ? '🔥' : '⏳'}
         </div>
       </div>
@@ -181,14 +181,14 @@ function TournamentCard({
               <span>Fixture pairings and schedules must come from the official physical process. This legacy season will not create them automatically.</span>
             </div>
             <div className="flex flex-wrap gap-2 sm:gap-3">
-              <Link href={`/admin/matches?tournament=${tournament._id}`} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600/10 py-3 text-[10px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white">
+              <Link href={`/admin/matches?tournament=${tournament._id}`} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600/10 px-3 text-[10px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white">
                 <CalendarDays className="h-4 w-4" /> Match Centre
               </Link>
               {canManageTournament ? (
                 <button
                   type="button"
                   onClick={() => onStatusUpdate(tournament._id, 'ongoing')}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/10 py-3 text-[10px] font-black uppercase tracking-widest text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white"
+                  className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/10 px-3 text-[10px] font-black uppercase tracking-widest text-emerald-500 transition-all hover:bg-emerald-500 hover:text-white"
                 >
                   <RefreshCw className="h-4 w-4" /> Start Season
                 </button>
@@ -219,7 +219,7 @@ function TournamentCard({
                 <span>All <span className="uppercase">{tournament.currentStage.replace(/_/g, ' ')}</span> matches are complete. Automatic legacy progression is disabled; use Match Centre to review the completed results.</span>
               </div>
             )}
-            <Link href={`/admin/matches?tournament=${tournament._id}`} className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-600/10 py-3 text-[10px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white">
+            <Link href={`/admin/matches?tournament=${tournament._id}`} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-600/10 px-3 text-[10px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white">
               <CalendarDays className="h-3.5 w-3.5" /> Open Match Centre
             </Link>
           </div>
@@ -228,7 +228,7 @@ function TournamentCard({
         {tournament.status === 'ongoing' && (
           <button
             onClick={() => { if (confirm('Mark this season as completed?')) onStatusUpdate(tournament._id, 'completed'); }}
-            className="flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:bg-red-600/10 hover:text-red-400 border border-white/5"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/5 bg-white/5 px-3 text-[10px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:bg-red-600/10 hover:text-red-400"
           >
             <CheckCircle2 className="h-4 w-4" /> Mark Completed
           </button>
@@ -387,17 +387,17 @@ export default function TournamentsManagementPage() {
   if (isLoading) return <PageSpinner />;
 
   return (
-    <div className="space-y-14 animate-reveal">
+    <div className="space-y-10 animate-reveal">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-none">Seasons.</h1>
+          <h1 className="text-3xl font-black italic uppercase leading-none tracking-tighter text-white sm:text-4xl">Seasons.</h1>
           <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">Tournament Configuration</p>
         </div>
         <button
           onClick={() => setIsCreating(true)}
           disabled={!isTournamentCatalogueCurrent}
           title={isTournamentCatalogueCurrent ? undefined : 'Reload the tournament catalogue first'}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-blue-500 hover:scale-105 active:scale-95 shadow-xl shadow-blue-600/20 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-xl shadow-blue-600/20 transition-all hover:scale-105 hover:bg-blue-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
         >
           <Plus className="h-4 w-4" /> Initialize Season
         </button>
@@ -412,14 +412,14 @@ export default function TournamentsManagementPage() {
               <p className="mt-1 text-[10px] text-red-200/70">{tournamentLoadError} Creation is paused to prevent a duplicate season.</p>
             </div>
           </div>
-          <button type="button" onClick={() => void fetchTournaments()} className="inline-flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-red-100 transition-colors hover:bg-red-500/20">
+          <button type="button" onClick={() => void fetchTournaments()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-red-100 transition-colors hover:bg-red-500/20">
             <RefreshCw className="h-3.5 w-3.5" /> Retry
           </button>
         </div>
       ) : null}
 
       {isCreating && isTournamentCatalogueCurrent && (
-        <div className="rounded-[40px] border border-blue-500/20 bg-blue-500/5 p-8 backdrop-blur-3xl animate-reveal">
+        <div className="rounded-[32px] border border-blue-500/20 bg-blue-500/5 p-6 backdrop-blur-3xl animate-reveal">
           <h2 className="text-xl font-black italic tracking-tighter text-white uppercase mb-2">
             New {newTournament.division === 'women' ? 'Women’s Three-Team' : 'Men’s 14-Team'} Season
           </h2>
@@ -545,7 +545,7 @@ export default function TournamentsManagementPage() {
       )}
 
       {tournaments.length === 0 && !tournamentLoadError && (
-        <div className="p-12 text-center rounded-[40px] border border-white/5 bg-white/[0.01]">
+        <div className="rounded-[32px] border border-white/5 bg-white/[0.01] p-8 text-center">
           <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] italic">No tournaments found. Initialize the first season!</p>
         </div>
       )}

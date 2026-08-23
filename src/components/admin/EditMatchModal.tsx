@@ -163,7 +163,7 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-reveal">
+    <div className="fixed inset-0 z-50 flex h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain px-3 py-2 animate-reveal sm:items-center sm:px-4 sm:py-4">
       <button
         type="button"
         tabIndex={-1}
@@ -180,11 +180,11 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
         aria-describedby="edit-match-description"
         aria-busy={isSaving}
         tabIndex={-1}
-        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[40px] border border-white/10 bg-[#0a0a0a] p-8 shadow-2xl"
+        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-[28px] border border-white/10 bg-[#0a0a0a] p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-[32px] sm:p-6"
       >
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <div>
-            <h2 id="edit-match-title" className="text-2xl font-black italic tracking-tighter text-white uppercase">Official Schedule</h2>
+            <h2 id="edit-match-title" className="text-xl font-black italic tracking-tighter text-white uppercase">Official Schedule</h2>
             <p id="edit-match-description" className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Record the physically confirmed kickoff and venue</p>
           </div>
           <button
@@ -193,7 +193,7 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
             aria-label="Close match editor"
             disabled={isSaving}
             onClick={requestClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white transition-all border border-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white transition-all border border-white/5 disabled:cursor-not-allowed disabled:opacity-40"
           >
             ✕
           </button>
@@ -267,7 +267,7 @@ export default function EditMatchModal({ matchId, initialDate, initialVenue, onC
                   type="button"
                   onClick={() => void fetchVenues()}
                   disabled={loadingVenues}
-                  className="shrink-0 text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4 disabled:opacity-50"
+                  className="min-h-11 shrink-0 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest text-white underline underline-offset-4 disabled:opacity-50"
                 >
                   {loadingVenues ? 'Retrying...' : 'Retry'}
                 </button>

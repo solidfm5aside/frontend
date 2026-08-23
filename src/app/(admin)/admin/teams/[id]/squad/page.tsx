@@ -418,18 +418,18 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:gap-10">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:gap-8">
         <section
           ref={formSectionRef}
           aria-labelledby="add-player-heading"
-          className="h-fit rounded-[28px] border border-white/5 bg-white/[0.02] p-5 backdrop-blur-3xl sm:rounded-[40px] sm:p-8"
+          className="h-fit rounded-[28px] border border-white/5 bg-white/[0.02] p-5 backdrop-blur-3xl sm:rounded-[32px] sm:p-6"
         >
-          <div className="mb-8 flex items-center gap-4">
+          <div className="mb-6 flex items-center gap-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-500">
               {editingPlayer ? <Pencil className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
             </div>
             <div>
-              <h2 id="add-player-heading" className="text-xl font-bold uppercase italic tracking-tight text-white">
+              <h2 id="add-player-heading" className="text-lg font-bold uppercase italic tracking-tight text-white">
                 {editingPlayer ? `Edit ${editingPlayer.name}` : 'Add Player'}
               </h2>
               <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-neutral-600">
@@ -521,7 +521,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                 minLength={2}
                 maxLength={100}
                 autoComplete="name"
-                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50"
+                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 [@media(pointer:fine)]:text-sm"
                 value={formData.name}
                 onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
                 placeholder="e.g. John Doe"
@@ -535,7 +535,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                 required
                 minLength={2}
                 maxLength={100}
-                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50"
+                className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 [@media(pointer:fine)]:text-sm"
                 value={formData.nationality}
                 onChange={(event) => setFormData((current) => ({ ...current, nationality: event.target.value }))}
                 placeholder="e.g. Nigeria"
@@ -606,7 +606,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                   max={99}
                   step={1}
                   inputMode="numeric"
-                  className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50"
+                  className="w-full rounded-2xl border border-white/5 bg-white/5 px-5 py-4 text-base text-white outline-none transition-all placeholder:text-neutral-700 focus:border-blue-500/50 [@media(pointer:fine)]:text-sm"
                   value={formData.jerseyNumber}
                   onChange={(event) => setFormData((current) => ({ ...current, jerseyNumber: event.target.value }))}
                   placeholder="10"
@@ -617,7 +617,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
             <button
               type="submit"
               disabled={isSaving || (rosterIsFull && !editingPlayer)}
-              className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : editingPlayer ? <Pencil className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
               {isSaving ? (editingPlayer ? 'Saving Changes...' : 'Registering Player...') : editingPlayer ? 'Save Player Changes' : rosterIsFull ? 'Squad Limit Reached' : 'Register Player'}
@@ -640,7 +640,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
           aria-labelledby="current-squad-heading"
           className="min-w-0 overflow-hidden rounded-[28px] border border-white/5 bg-white/[0.02] backdrop-blur-3xl sm:rounded-[40px]"
         >
-          <div className="flex items-center justify-between border-b border-white/5 p-5 sm:p-8">
+          <div className="flex items-center justify-between border-b border-white/5 p-5 sm:p-6">
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
                 <Users className="h-5 w-5" />
@@ -669,10 +669,10 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
             <table className="w-full min-w-[600px] border-collapse">
               <thead>
                 <tr className="border-b border-white/5 text-left text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">
-                  <th className="px-5 py-5 sm:px-8 sm:py-6">#</th>
-                  <th className="px-5 py-5 sm:px-8 sm:py-6">Player</th>
-                  <th className="px-5 py-5 text-center sm:px-8 sm:py-6">Pos</th>
-                  <th className="px-5 py-5 text-right sm:px-8 sm:py-6">Actions</th>
+                  <th className="px-5 py-4 sm:px-6 sm:py-5">#</th>
+                  <th className="px-5 py-4 sm:px-6 sm:py-5">Player</th>
+                  <th className="px-5 py-4 text-center sm:px-6 sm:py-5">Pos</th>
+                  <th className="px-5 py-4 text-right sm:px-6 sm:py-5">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -681,12 +681,12 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                   const playerActionsLocked = Boolean(deletingPlayerId) || isSaving;
                   return (
                     <tr key={player._id} className="group transition-colors hover:bg-white/[0.02]">
-                      <td className="px-5 py-5 sm:px-8 sm:py-6">
+                      <td className="px-5 py-3 sm:px-6">
                         <span className="text-lg font-black italic text-neutral-700 transition-colors group-hover:text-blue-500">
                           {String(player.jerseyNumber).padStart(2, '0')}
                         </span>
                       </td>
-                      <td className="px-5 py-5 sm:px-8 sm:py-6">
+                      <td className="px-5 py-3 sm:px-6">
                         <div className="flex items-center gap-3">
                           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/5 bg-white/5 text-xs font-black text-neutral-600">
                             {isOptimizableImageUrl(player.passportPic) ? (
@@ -705,12 +705,12 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-5 text-center sm:px-8 sm:py-6">
+                      <td className="px-5 py-3 text-center sm:px-6">
                         <span className="inline-block rounded-lg bg-white/5 px-2 py-1 text-[10px] font-black text-neutral-400 transition-colors group-hover:text-white">
                           {player.position}
                         </span>
                       </td>
-                      <td className="px-5 py-5 text-right sm:px-8 sm:py-6">
+                      <td className="px-5 py-3 text-right sm:px-6">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
@@ -718,7 +718,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                             disabled={playerActionsLocked}
                             aria-label={'Edit ' + player.name}
                             title="Edit Player"
-                            className="rounded-lg p-2 text-neutral-600 transition-colors hover:bg-blue-500/10 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-blue-500/10 hover:text-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -728,7 +728,7 @@ export default function SquadPage({ params }: { params: Promise<{ id: string }> 
                             disabled={playerActionsLocked}
                             aria-label={'Remove ' + player.name + ' from squad'}
                             className={clsx(
-                              'rounded-lg p-2 text-neutral-600 transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50',
+                              'inline-flex h-11 w-11 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50',
                               isDeleting && 'cursor-not-allowed opacity-50',
                             )}
                           >

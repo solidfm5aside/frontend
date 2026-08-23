@@ -168,10 +168,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
         
         <div className="relative z-10 max-w-md w-full animate-reveal">
-           <div className="inline-flex h-20 w-20 items-center justify-center rounded-3xl bg-blue-600/10 border border-blue-500/20 text-3xl mb-8">
+           <div className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-blue-500/20 bg-blue-600/10 text-2xl">
               ⏳
            </div>
-           <h1 className="text-4xl font-black italic tracking-tighter text-white uppercase mb-4">Account <span className="text-blue-500 not-italic">Pending.</span></h1>
+           <h1 className="mb-4 text-3xl font-black italic uppercase tracking-tighter text-white sm:text-4xl">Account <span className="text-blue-500 not-italic">Pending.</span></h1>
            <p className="text-sm font-bold text-neutral-500 uppercase tracking-widest leading-loose mb-12 italic">
               Welcome to the team, {admin.name.split(' ')[0]}.<br/>
               Your admin access is currently in the &quot;Review&quot; queue. A Super Admin will verify your credentials shortly.
@@ -310,7 +310,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content Area */}
       <main id="main-content" className="min-w-0 flex-1 overflow-y-auto">
-        <header className="sticky top-0 z-40 border-b border-white/5 bg-black/40 py-6 px-4 sm:px-8 backdrop-blur-xl flex items-center justify-between lg:hidden">
+        <header className="sticky top-0 z-40 flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-4 backdrop-blur-xl sm:px-6 lg:hidden">
             <div className="flex items-center gap-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-black text-white">S</div>
               <span className="text-xs font-black uppercase tracking-widest">Admin Portal</span>
@@ -329,7 +329,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
         </header>
 
-        <div className="p-6 md:p-10 lg:p-16 max-w-7xl mx-auto">
+        <div className="mx-auto max-w-7xl p-4 sm:p-6 md:p-8 lg:p-10">
           {children}
         </div>
       </main>

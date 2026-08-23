@@ -23,27 +23,27 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div className="space-y-12 animate-reveal max-w-5xl">
+    <div className="max-w-5xl space-y-8 animate-reveal md:space-y-10">
       <div>
-         <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase">Reports.</h1>
+         <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase sm:text-4xl">Reports.</h1>
          <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase">System Data Extraction</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {reports.map((report) => (
-          <div key={report.id} className="group rounded-[30px] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-3xl transition-all hover:bg-white/[0.04] hover:border-blue-500/20 flex flex-col justify-between aspect-square">
+          <div key={report.id} className="group flex min-h-[19rem] flex-col justify-between rounded-[28px] border border-white/5 bg-white/[0.02] p-6 backdrop-blur-3xl transition-all hover:border-blue-500/20 hover:bg-white/[0.04]">
             <div>
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 border border-white/10 text-3xl mb-6">
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-2xl">
                  {report.icon}
               </div>
-              <h3 className="text-xl font-black italic tracking-tighter text-white uppercase mb-3">{report.name}</h3>
+              <h3 className="mb-3 text-lg font-black italic uppercase tracking-tighter text-white">{report.name}</h3>
               <p className="text-xs text-neutral-500 leading-relaxed font-medium">{report.description}</p>
             </div>
             
             <button
                onClick={() => handleDownload(report.name)}
                disabled={isGenerating === report.name}
-               className={`mt-8 w-full h-[52px] rounded-2xl border bg-white/[0.02] text-[10px] font-black uppercase tracking-widest transition-all ${
+               className={`mt-6 h-12 w-full rounded-2xl border bg-white/[0.02] text-[10px] font-black uppercase tracking-widest transition-all ${
                  isGenerating === report.name 
                  ? 'border-neutral-500/20 text-neutral-500 cursor-wait' 
                  : 'border-white/10 text-white hover:bg-white/10 hover:border-white/20'

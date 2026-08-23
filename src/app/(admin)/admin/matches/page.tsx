@@ -54,6 +54,10 @@ const KNOCKOUT_STAGES = new Set([
 
 type StatusFilter = 'all' | 'scheduled' | 'live' | 'completed' | 'cancelled';
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function MatchesManagementPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [tournaments, setTournaments] = useState<TournamentSummary[]>([]);
@@ -187,6 +191,14 @@ export default function MatchesManagementPage() {
   const currentIndex = selectedDate ? sortedDays.indexOf(selectedDate) : -1;
   const currentDayMatches = selectedDate ? matchesByDay[selectedDate] ?? [] : [];
   const totalDays = sortedDays.length;
+  const selectedTournament = tournaments.find(
+    (tournament) => tournament._id === selectedTournamentId,
+  );
+  const isRosterManagedWomenTournament = Boolean(
+    selectedTournament?.division === 'women'
+    && selectedTournament.formatVersion === 3
+    && selectedTournament.format === 'single_table_final'
+  );
 
   useEffect(() => {
     if (queryTargetHandled.current || matches.length === 0) return;
@@ -209,24 +221,22 @@ export default function MatchesManagementPage() {
       if (response.success) {
         toast.success(`Match updated to ${status}`);
       } else {
-        if (previousStatus) setMatches(prev => prev.map(m => m._id === id ? { ...m, status: previousStatus } : m));
-        void fetchMatches(true);
-        toast.error('Failed to update match status');
+        throw new Error(response.message || 'Failed to update match status');
       }
-    } catch {
+    } catch (error: unknown) {
       if (previousStatus) setMatches(prev => prev.map(m => m._id === id ? { ...m, status: previousStatus } : m));
       void fetchMatches(true);
-      toast.error('Failed to update match status');
+      toast.error(getErrorMessage(error, 'Failed to update match status'));
     }
   };
 
   if (isLoading && tournaments.length === 0 && !loadError) return <PageSpinner />;
 
   return (
-    <div className="space-y-8 animate-reveal">
+    <div className="space-y-6 animate-reveal">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase leading-none">
+          <h1 className="text-2xl font-black italic uppercase leading-none tracking-tighter text-white sm:text-3xl">
             Matches.
           </h1>
           <p className="mt-1.5 text-[9px] sm:text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase italic">
@@ -286,7 +296,7 @@ export default function MatchesManagementPage() {
                   setLoadError(null);
                   setIsLoading(true);
                 }}
-                className={`px-4 sm:px-6 py-2 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
+                className={`min-h-11 px-4 sm:px-6 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
                   statusFilter === f ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'
                 }`}
               >
@@ -327,7 +337,7 @@ export default function MatchesManagementPage() {
               disabled={currentIndex <= 0}
               onClick={() => setSelectedDate(sortedDays[currentIndex - 1])}
               aria-label="Show previous matchday"
-              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400 transition-all hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -346,7 +356,7 @@ export default function MatchesManagementPage() {
               disabled={currentIndex >= totalDays - 1}
               onClick={() => setSelectedDate(sortedDays[currentIndex + 1])}
               aria-label="Show next matchday"
-              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400 transition-all hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -427,23 +437,35 @@ export default function MatchesManagementPage() {
                           type="button"
                           onClick={() => setEditMatchId(match._id)}
                           aria-label={`Edit ${match.homeTeam?.name ?? 'home team'} versus ${match.awayTeam?.name ?? 'away team'}`}
-                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-all whitespace-nowrap"
+                          className="min-h-11 whitespace-nowrap rounded-lg border border-white/10 bg-white/5 px-3 text-[8px] font-black uppercase tracking-widest text-neutral-400 transition-all hover:bg-white/10 hover:text-white sm:rounded-xl sm:px-4 sm:text-[9px]"
                         >
                           🖊 Edit
                         </button>
-                        <button
-                          type="button"
-                          disabled={!match.date || !match.venue}
-                          title={!match.date || !match.venue ? 'Add the physically confirmed kickoff and venue before starting' : undefined}
-                          onClick={() => handleStatusUpdate(match._id, 'live')}
-                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-red-600 text-white hover:bg-red-500 transition-all shadow-lg shadow-red-600/20 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          🚀 Start
-                        </button>
+                        {isRosterManagedWomenTournament ? (
+                          <button
+                            type="button"
+                            title="Open the match console to verify both tournament squads before kickoff"
+                            aria-label={`Open match console for ${match.homeTeam?.name ?? 'home team'} versus ${match.awayTeam?.name ?? 'away team'}`}
+                            onClick={() => setSelectedMatchId(match._id)}
+                            className="min-h-11 whitespace-nowrap rounded-lg bg-blue-600 px-3 text-[8px] font-black uppercase tracking-widest text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 sm:rounded-xl sm:px-4 sm:text-[9px]"
+                          >
+                            Console
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={!match.date || !match.venue}
+                            title={!match.date || !match.venue ? 'Add the physically confirmed kickoff and venue before starting' : undefined}
+                            onClick={() => handleStatusUpdate(match._id, 'live')}
+                            className="min-h-11 whitespace-nowrap rounded-lg bg-red-600 px-3 text-[8px] font-black uppercase tracking-widest text-white shadow-lg shadow-red-600/20 transition-all hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-xl sm:px-4 sm:text-[9px]"
+                          >
+                            🚀 Start
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleStatusUpdate(match._id, 'cancelled')}
-                          className="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-neutral-500 hover:bg-red-500/10 hover:text-red-400 transition-all whitespace-nowrap"
+                          className="min-h-11 whitespace-nowrap rounded-lg px-2.5 text-[8px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:bg-red-500/10 hover:text-red-400 sm:rounded-xl sm:text-[9px]"
                         >
                           Cancel
                         </button>
@@ -456,21 +478,21 @@ export default function MatchesManagementPage() {
                           onClick={() => KNOCKOUT_STAGES.has(match.stage)
                             ? setSelectedMatchId(match._id)
                             : handleStatusUpdate(match._id, 'completed')}
-                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 whitespace-nowrap"
+                          className="min-h-11 whitespace-nowrap rounded-lg bg-emerald-600 px-3 text-[8px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 sm:rounded-xl sm:px-4 sm:text-[9px]"
                         >
                           {KNOCKOUT_STAGES.has(match.stage) ? '🏆 Resolve' : '✓ Finish'}
                         </button>
                         <button
                           type="button"
                           onClick={() => setSelectedMatchId(match._id)}
-                          className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10 transition-all whitespace-nowrap"
+                          className="min-h-11 whitespace-nowrap rounded-lg border border-white/10 bg-white/5 px-3 text-[8px] font-black uppercase tracking-widest text-neutral-400 transition-all hover:bg-white/10 hover:text-white sm:rounded-xl sm:px-4 sm:text-[9px]"
                         >
                           + Event
                         </button>
                         <button
                           type="button"
                           onClick={() => handleStatusUpdate(match._id, 'cancelled')}
-                          className="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-neutral-500 hover:bg-red-500/10 hover:text-red-400 transition-all whitespace-nowrap"
+                          className="min-h-11 whitespace-nowrap rounded-lg px-2.5 text-[8px] font-black uppercase tracking-widest text-neutral-500 transition-all hover:bg-red-500/10 hover:text-red-400 sm:rounded-xl sm:text-[9px]"
                         >
                           Cancel
                         </button>
@@ -480,7 +502,7 @@ export default function MatchesManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleStatusUpdate(match._id, 'scheduled')}
-                        className="h-7 sm:h-8 px-3 sm:px-4 rounded-lg sm:rounded-xl text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white transition-all whitespace-nowrap"
+                        className="min-h-11 whitespace-nowrap rounded-lg bg-blue-600/10 px-3 text-[8px] font-black uppercase tracking-widest text-blue-400 transition-all hover:bg-blue-600 hover:text-white sm:rounded-xl sm:px-4 sm:text-[9px]"
                       >
                         Restore
                       </button>
@@ -490,7 +512,7 @@ export default function MatchesManagementPage() {
                         type="button"
                         onClick={() => setSelectedMatchId(match._id)}
                         aria-label={`Manage ${match.homeTeam?.name ?? 'home team'} versus ${match.awayTeam?.name ?? 'away team'}`}
-                        className="h-7 sm:h-8 px-2 rounded-lg bg-white/5 text-neutral-500 hover:text-white transition-all"
+                        className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/5 text-neutral-500 transition-all hover:text-white"
                       >
                         ⚙
                       </button>
@@ -506,6 +528,7 @@ export default function MatchesManagementPage() {
       {selectedMatchId && (
         <MatchControllerModal
           matchId={selectedMatchId}
+          enforceCompleteRosterBeforeStart={isRosterManagedWomenTournament}
           onClose={() => setSelectedMatchId(null)}
           onUpdate={() => void fetchMatches(true)}
         />

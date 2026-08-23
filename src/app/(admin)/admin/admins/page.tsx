@@ -139,10 +139,10 @@ export default function AdminManagementPage() {
     return (
       <div className="space-y-8 animate-reveal">
         <div>
-          <h1 className="text-4xl font-black italic uppercase leading-none tracking-tighter text-white md:text-5xl">Admins.</h1>
+          <h1 className="text-3xl font-black italic uppercase leading-none tracking-tighter text-white sm:text-4xl">Admins.</h1>
           <p className="mt-2 text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-500">Administrator Access</p>
         </div>
-        <div role="alert" className="rounded-[28px] border border-red-500/20 bg-red-500/10 p-8 text-sm font-bold text-red-300 sm:rounded-[40px]">
+        <div role="alert" className="rounded-[28px] border border-red-500/20 bg-red-500/10 p-6 text-sm font-bold text-red-300 sm:rounded-[32px]">
           Only a Super Admin can view or change administrator access.
         </div>
       </div>
@@ -152,7 +152,7 @@ export default function AdminManagementPage() {
   return (
     <div className="space-y-8 md:space-y-10 animate-reveal">
       <div>
-        <h1 className="text-4xl font-black italic uppercase leading-none tracking-tighter text-white md:text-5xl">Admins.</h1>
+        <h1 className="text-3xl font-black italic uppercase leading-none tracking-tighter text-white sm:text-4xl">Admins.</h1>
         <p className="mt-2 text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-500">Manage Portal Access</p>
       </div>
 
@@ -189,7 +189,7 @@ export default function AdminManagementPage() {
       ) : null}
 
       <section aria-labelledby="admin-accounts-heading" className="overflow-hidden rounded-[28px] border border-white/5 bg-white/[0.01] shadow-2xl backdrop-blur-3xl sm:rounded-[40px]">
-        <div className="flex flex-col gap-2 border-b border-white/5 p-5 sm:p-8">
+        <div className="flex flex-col gap-2 border-b border-white/5 p-5 sm:p-6">
           <h2 id="admin-accounts-heading" className="text-xl font-black uppercase italic tracking-tight text-white">Administrator Accounts</h2>
           <p className="text-[9px] font-bold uppercase tracking-widest text-neutral-600">Access changes end the affected account&apos;s active sessions.</p>
         </div>
@@ -198,10 +198,10 @@ export default function AdminManagementPage() {
           <table className="w-full min-w-[880px] border-collapse text-left">
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.02]">
-                <th className="px-5 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-8">Account</th>
-                <th className="px-5 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-8">Role</th>
-                <th className="px-5 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-8">Status</th>
-                <th className="px-5 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-8">Safe Controls</th>
+                <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-6 sm:py-5">Account</th>
+                <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-6 sm:py-5">Role</th>
+                <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-6 sm:py-5">Status</th>
+                <th className="px-5 py-4 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 sm:px-6 sm:py-5">Safe Controls</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -211,25 +211,25 @@ export default function AdminManagementPage() {
                 const controlsLocked = Boolean(adminAction) || isCurrentAccount;
                 return (
                   <tr key={admin._id} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="px-5 py-6 sm:px-8">
+                    <td className="px-5 py-5 sm:px-6">
                       <p className="text-sm font-bold text-white">
                         {admin.name}
                         {isCurrentAccount ? <span className="ml-2 text-[9px] font-black uppercase tracking-widest text-blue-400">You</span> : null}
                       </p>
                       <p className="mt-1 break-all text-[10px] font-bold text-neutral-600">{admin.email}</p>
                     </td>
-                    <td className="px-5 py-6 sm:px-8">
+                    <td className="px-5 py-5 sm:px-6">
                       <span className={clsx('inline-flex rounded-full border px-3 py-1.5 text-[9px] font-black uppercase tracking-widest', ROLE_STYLES[admin.role])}>
                         {ROLE_LABELS[admin.role]}
                       </span>
                     </td>
-                    <td className="px-5 py-6 sm:px-8">
+                    <td className="px-5 py-5 sm:px-6">
                       <p className={clsx('text-[10px] font-black uppercase tracking-widest', admin.isVerified ? 'text-emerald-400' : 'text-amber-300')}>
                         {admin.isVerified ? 'Verified' : 'Pending verification'}
                       </p>
                       <p className="mt-1 text-[9px] font-bold text-neutral-600">{describeLastLogin(admin.lastLogin)}</p>
                     </td>
-                    <td className="px-5 py-6 text-right sm:px-8">
+                    <td className="px-5 py-5 text-right sm:px-6">
                       {isCurrentAccount ? (
                         <span className="text-[9px] font-black uppercase tracking-widest text-neutral-600">Protected current account</span>
                       ) : (
@@ -239,7 +239,7 @@ export default function AdminManagementPage() {
                               type="button"
                               onClick={() => void updateRole(admin, 'admin')}
                               disabled={controlsLocked}
-                              className="flex h-10 items-center gap-2 rounded-xl bg-emerald-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-emerald-400 transition-colors hover:bg-emerald-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex h-11 items-center gap-2 rounded-xl bg-emerald-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-emerald-400 transition-colors hover:bg-emerald-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {isBusy && adminAction.role === 'admin' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
                               {admin.isVerified ? 'Grant Admin' : 'Verify & Grant'}
@@ -252,7 +252,7 @@ export default function AdminManagementPage() {
                                 type="button"
                                 onClick={() => void updateRole(admin, 'super_admin')}
                                 disabled={controlsLocked}
-                                className="flex h-10 items-center gap-2 rounded-xl bg-amber-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-amber-300 transition-colors hover:bg-amber-500 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-11 items-center gap-2 rounded-xl bg-amber-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-amber-300 transition-colors hover:bg-amber-500 hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {isBusy && adminAction.role === 'super_admin' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Crown className="h-3.5 w-3.5" />}
                                 Make Super
@@ -261,7 +261,7 @@ export default function AdminManagementPage() {
                                 type="button"
                                 onClick={() => void updateRole(admin, 'viewer')}
                                 disabled={controlsLocked}
-                                className="flex h-10 items-center gap-2 rounded-xl border border-red-500/20 px-4 text-[9px] font-black uppercase tracking-widest text-red-400 transition-colors hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-11 items-center gap-2 rounded-xl border border-red-500/20 px-4 text-[9px] font-black uppercase tracking-widest text-red-400 transition-colors hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 {isBusy && adminAction.role === 'viewer' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ShieldOff className="h-3.5 w-3.5" />}
                                 Revoke
@@ -274,7 +274,7 @@ export default function AdminManagementPage() {
                               type="button"
                               onClick={() => void updateRole(admin, 'admin')}
                               disabled={controlsLocked}
-                              className="flex h-10 items-center gap-2 rounded-xl border border-white/10 px-4 text-[9px] font-black uppercase tracking-widest text-neutral-400 transition-colors hover:border-blue-500/40 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex h-11 items-center gap-2 rounded-xl border border-white/10 px-4 text-[9px] font-black uppercase tracking-widest text-neutral-400 transition-colors hover:border-blue-500/40 hover:text-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {isBusy && adminAction.role === 'admin' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                               Make Admin

@@ -10,11 +10,11 @@ export default function AdminPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-md">
-        <div className="mb-12 text-center">
-          <Link href="/" className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-2xl font-black text-white shadow-2xl shadow-blue-600/20 mb-6">
+        <div className="mb-8 text-center sm:mb-10">
+          <Link href="/" className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-xl font-black text-white shadow-2xl shadow-blue-600/20">
             SFM
           </Link>
-          <h1 className="text-4xl font-black italic tracking-tighter text-white uppercase">
+          <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase sm:text-4xl">
             Admin <span className="text-blue-500 not-italic uppercase">Portal</span>
           </h1>
           <p className="mt-3 text-sm font-medium text-neutral-500 uppercase tracking-widest leading-relaxed">
@@ -25,14 +25,14 @@ export default function AdminPage() {
         <div className="space-y-4">
           <Link 
             href="/login"
-            className="flex h-16 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-bold text-white transition-all hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-blue-600/10"
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-base font-bold text-white shadow-xl shadow-blue-600/10 transition-all hover:scale-[1.02] hover:bg-blue-500 active:scale-[0.98]"
           >
             Sign In to Dashboard
           </Link>
           
           <Link 
             href="/register"
-            className="flex h-16 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-bold text-white backdrop-blur-md transition-all hover:bg-white/10 hover:scale-[1.02] active:scale-[0.98]"
+            className="flex h-14 w-full items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-base font-bold text-white backdrop-blur-md transition-all hover:scale-[1.02] hover:bg-white/10 active:scale-[0.98]"
           >
             Apply for Admin Access
           </Link>

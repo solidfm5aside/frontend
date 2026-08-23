@@ -80,7 +80,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[100] flex h-[100dvh] items-start justify-center overflow-y-auto overscroll-contain p-2 sm:items-center sm:p-4">
       {/* Backdrop */}
       <button
         type="button"
@@ -97,14 +97,14 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-3xl sm:rounded-[40px] border border-white/10 bg-[#0A0A0A] p-6 sm:p-10 shadow-2xl animate-reveal-up"
+        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border border-white/10 bg-[#0A0A0A] p-5 shadow-2xl animate-reveal-up sm:max-h-[calc(100dvh-2rem)] sm:p-7"
       >
         {/* Glow effect */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-blue-600/10 blur-[80px] rounded-full"></div>
 
         <div className="relative z-10">
-          <div className="flex items-center justify-between mb-8">
-            <h2 id={titleId} className="text-2xl font-black italic tracking-tighter text-white uppercase">{title}</h2>
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <h2 id={titleId} className="text-xl font-black italic tracking-tighter text-white uppercase">{title}</h2>
             <button
               ref={closeButtonRef}
               type="button"

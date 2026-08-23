@@ -130,10 +130,10 @@ export default function PlayersDirectoryPage() {
   if (isLoading) return <PageSpinner />;
 
   return (
-    <div className="space-y-10 animate-reveal">
-      <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+    <div className="space-y-8 animate-reveal md:space-y-10">
+      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-4xl font-black italic uppercase leading-none tracking-tighter text-white md:text-5xl">Players.</h1>
+          <h1 className="text-3xl font-black italic uppercase leading-none tracking-tighter text-white sm:text-4xl">Players.</h1>
           <p className="mt-2 text-[10px] font-black uppercase italic tracking-[0.3em] text-neutral-500">Global Talent Directory</p>
           <p aria-live="polite" className="mt-3 text-[9px] font-bold uppercase tracking-widest text-neutral-600">
             {directoryTotal === players.length
@@ -146,12 +146,12 @@ export default function PlayersDirectoryPage() {
           <div className="group relative">
             <label htmlFor="player-directory-search" className="sr-only">Search players or teams</label>
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500 transition-colors group-focus-within:text-blue-500" />
-            <input id="player-directory-search" type="search" placeholder="Search players or teams..." className="w-full rounded-2xl border border-white/5 bg-white/5 py-4 pl-12 pr-6 text-sm text-white outline-none transition-all focus:border-blue-500/50 sm:w-64" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
+            <input id="player-directory-search" type="search" placeholder="Search players or teams..." className="w-full rounded-2xl border border-white/5 bg-white/5 py-4 pl-12 pr-6 text-base text-white outline-none transition-all focus:border-blue-500/50 sm:w-64 [@media(pointer:fine)]:text-sm" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
           </div>
 
           <div className="flex gap-2 overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] p-1.5 scrollbar-hide" aria-label="Filter players by position">
             {POSITION_FILTERS.map((filter) => (
-              <button key={filter} type="button" aria-pressed={positionFilter === filter} onClick={() => setPositionFilter(filter)} className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${positionFilter === filter ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'}`}>
+              <button key={filter} type="button" aria-pressed={positionFilter === filter} onClick={() => setPositionFilter(filter)} className={`min-h-11 shrink-0 whitespace-nowrap rounded-xl px-4 text-[10px] font-black uppercase tracking-widest transition-all ${positionFilter === filter ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-neutral-500 hover:text-white'}`}>
                 {filter}
               </button>
             ))}
@@ -160,7 +160,7 @@ export default function PlayersDirectoryPage() {
       </div>
 
       {loadError ? (
-        <div role="alert" className="flex flex-col gap-4 rounded-[28px] border border-red-500/20 bg-red-500/5 p-8 text-center sm:items-center">
+        <div role="alert" className="flex flex-col gap-4 rounded-[28px] border border-red-500/20 bg-red-500/5 p-6 text-center sm:items-center">
           <p className="text-sm font-bold text-red-300">{loadError}</p>
           <button type="button" onClick={() => void fetchPlayers()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 px-5 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5"><RefreshCw className="h-3.5 w-3.5" /> Load complete directory</button>
         </div>
@@ -168,36 +168,36 @@ export default function PlayersDirectoryPage() {
         <div className="overflow-hidden rounded-[40px] border border-white/5 bg-white/[0.01] shadow-2xl backdrop-blur-3xl">
           <div className="flex flex-col gap-2 border-b border-white/5 bg-white/[0.02] px-5 py-4 text-[9px] font-bold uppercase tracking-widest text-neutral-600 sm:flex-row sm:items-center sm:justify-between md:px-8">
             <span>{filteredPlayers.length} {filteredPlayers.length === 1 ? 'player' : 'players'} match the current view</span>
-            <button type="button" onClick={() => void fetchPlayers(true)} disabled={isRefreshing} className="inline-flex w-fit items-center gap-2 text-blue-400 transition-colors hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh all pages</button>
+            <button type="button" onClick={() => void fetchPlayers(true)} disabled={isRefreshing} className="inline-flex min-h-11 w-fit items-center gap-2 text-blue-400 transition-colors hover:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} /> Refresh all pages</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-white/5 bg-white/[0.02]">
-                  <th scope="col" className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Player Details</th>
-                  <th scope="col" className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Current Club</th>
-                  <th scope="col" className="px-4 py-5 text-center text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Pos</th>
-                  <th scope="col" className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-8 md:py-6">Actions</th>
+                  <th scope="col" className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Player Details</th>
+                  <th scope="col" className="px-4 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Current Club</th>
+                  <th scope="col" className="px-4 py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Pos</th>
+                  <th scope="col" className="px-4 py-4 text-right text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500 md:px-6 md:py-5">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filteredPlayers.map((player) => (
                   <tr key={player._id} className="group transition-colors hover:bg-white/[0.02]">
-                    <td className="px-4 py-6 md:px-8 md:py-8">
+                    <td className="px-4 py-5 md:px-6 md:py-6">
                       <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/5 bg-neutral-900 text-xl font-black text-neutral-700 transition-all group-hover:border-blue-500/30 group-hover:text-blue-500">{player.jerseyNumber}</div>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold uppercase tracking-tight text-white transition-colors group-hover:text-blue-500">{player.name}</p>
                           <p className="mt-1 truncate text-[10px] font-black uppercase tracking-widest text-neutral-600">{player.nationality}</p>
                           {player.teamId ? (
-                            <Link href={`/admin/teams/${player.teamId._id}/squad`} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 text-[9px] font-black uppercase tracking-widest text-blue-400 md:hidden">
+                            <Link href={`/admin/teams/${player.teamId._id}/squad`} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 text-[9px] font-black uppercase tracking-widest text-blue-400 md:hidden">
                               <Pencil className="h-3.5 w-3.5" /> Edit in squad
                             </Link>
                           ) : null}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-6 md:px-8 md:py-8">
+                    <td className="px-4 py-5 md:px-6 md:py-6">
                       {player.teamId ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex items-center gap-2 text-sm font-bold uppercase tracking-tight text-neutral-300 transition-colors hover:text-blue-400"><span>{player.teamId.name}</span><ExternalLink className="h-3.5 w-3.5" /></Link>
@@ -205,9 +205,9 @@ export default function PlayersDirectoryPage() {
                         </div>
                       ) : <span className="text-sm font-bold uppercase text-neutral-600">Unassigned</span>}
                     </td>
-                    <td className="px-4 py-6 text-center text-[10px] font-black md:px-8 md:py-8"><span className="rounded-lg bg-white/5 px-2 py-1 text-neutral-500 transition-colors group-hover:text-white">{player.position}</span></td>
-                    <td className="px-4 py-6 text-right md:px-8 md:py-8">
-                      {player.teamId ? <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-blue-400 transition-colors hover:bg-blue-600 hover:text-white"><Pencil className="h-3.5 w-3.5" /> Manage squad</Link> : <span className="text-[9px] font-black uppercase tracking-widest text-neutral-700">No squad</span>}
+                    <td className="px-4 py-5 text-center text-[10px] font-black md:px-6 md:py-6"><span className="rounded-lg bg-white/5 px-2 py-1 text-neutral-500 transition-colors group-hover:text-white">{player.position}</span></td>
+                    <td className="px-4 py-5 text-right md:px-6 md:py-6">
+                      {player.teamId ? <Link href={`/admin/teams/${player.teamId._id}/squad`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 text-[9px] font-black uppercase tracking-widest text-blue-400 transition-colors hover:bg-blue-600 hover:text-white"><Pencil className="h-3.5 w-3.5" /> Manage squad</Link> : <span className="text-[9px] font-black uppercase tracking-widest text-neutral-700">No squad</span>}
                     </td>
                   </tr>
                 ))}

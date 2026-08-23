@@ -92,33 +92,33 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-12 animate-reveal">
+    <div className="space-y-8 animate-reveal md:space-y-10">
       <div>
-        <h1 className="text-4xl md:text-5xl font-black italic tracking-tighter text-white uppercase">Overview.</h1>
+        <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase sm:text-4xl">Overview.</h1>
         <p className="mt-2 text-[10px] font-black tracking-[0.3em] text-neutral-500 uppercase">
           {dashboardTournament ? `Season ${dashboardTournament.season} • ${dashboardTournament.division === 'women' ? 'Women' : 'Men'} Dashboard` : 'Tournament Dashboard'}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
         {statCards.map((card) => (
-          <div key={card.name} className="group rounded-3xl border border-white/5 bg-white/[0.02] p-8 backdrop-blur-3xl transition-all hover:bg-white/[0.04] hover:border-blue-500/20">
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-3xl grayscale group-hover:grayscale-0 transition-all">{card.icon}</span>
+          <div key={card.name} className="group rounded-3xl border border-white/5 bg-white/[0.02] p-6 backdrop-blur-3xl transition-all hover:bg-white/[0.04] hover:border-blue-500/20">
+            <div className="mb-4 flex items-center justify-between">
+              <span className="text-2xl grayscale transition-all group-hover:grayscale-0">{card.icon}</span>
               <span className={`text-xs font-black uppercase tracking-widest ${card.color}`}>Live</span>
             </div>
             <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest mb-1">{card.name}</p>
-            <p className="text-4xl font-black italic text-white tracking-tighter">{card.value}</p>
+            <p className="text-3xl font-black italic tracking-tighter text-white">{card.value}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="rounded-[40px] border border-white/5 bg-white/[0.01] p-10 backdrop-blur-3xl">
-          <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-8 leading-none">Action <span className="text-blue-500">Center.</span></h2>
+        <div className="rounded-[32px] border border-white/5 bg-white/[0.01] p-6 backdrop-blur-3xl md:p-8">
+          <h2 className="mb-6 text-xl font-black italic uppercase leading-none tracking-tighter text-white">Action <span className="text-blue-500">Center.</span></h2>
           <div className="space-y-4">
             {stats?.pendingTeams && stats.pendingTeams > 0 ? (
-              <Link href="/admin/teams" className="flex items-center justify-between p-6 rounded-2xl bg-yellow-500/5 border border-yellow-500/10 hover:bg-yellow-500/10 transition-all group">
+              <Link href="/admin/teams" className="group flex items-center justify-between rounded-2xl border border-yellow-500/10 bg-yellow-500/5 p-4 transition-all hover:bg-yellow-500/10 sm:p-5">
                 <div className="flex items-center gap-4">
                   <span className="text-xl">🛡️</span>
                   <div>
@@ -129,13 +129,13 @@ export default function DashboardPage() {
                 <div className="h-8 w-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-yellow-500 group-hover:bg-yellow-500 group-hover:text-black transition-all">→</div>
               </Link>
             ) : (
-              <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center gap-4 text-neutral-500 uppercase font-black text-[10px] tracking-widest italic opacity-50">
+              <div className="flex items-center gap-4 rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-[10px] font-black uppercase italic tracking-widest text-neutral-500 opacity-50 sm:p-5">
                 <span>✓</span> No pending team registrations
               </div>
             )}
 
             {stats?.pendingAdmins !== undefined && stats.pendingAdmins > 0 && (
-              <Link href="/admin/admins" className="flex items-center justify-between p-6 rounded-2xl bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 transition-all group">
+              <Link href="/admin/admins" className="group flex items-center justify-between rounded-2xl border border-red-500/10 bg-red-500/5 p-4 transition-all hover:bg-red-500/10 sm:p-5">
                 <div className="flex items-center gap-4">
                   <span className="text-xl">🔒</span>
                   <div>
@@ -148,7 +148,7 @@ export default function DashboardPage() {
             )}
 
             {upcomingTournament ? (
-              <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 transition-all">
+              <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 transition-all sm:p-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <CalendarDays className="h-5 w-5 text-blue-500" />
@@ -174,7 +174,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : !womensTournament ? (
-              <Link href="/admin/tournaments" className="flex items-center justify-between p-6 rounded-2xl bg-blue-600/5 border border-blue-500/20 hover:bg-blue-600/10 transition-all group">
+              <Link href="/admin/tournaments" className="group flex items-center justify-between rounded-2xl border border-blue-500/20 bg-blue-600/5 p-4 transition-all hover:bg-blue-600/10 sm:p-5">
                 <div className="flex items-center gap-4">
                   <span className="text-xl">🏆</span>
                   <div>
@@ -187,7 +187,7 @@ export default function DashboardPage() {
             ) : null}
 
             {womensTournament ? (
-              <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6 transition-all">
+              <div className="flex flex-col gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 transition-all sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-4">
                     <CalendarDays className="h-5 w-5 text-blue-500" />
@@ -211,7 +211,7 @@ export default function DashboardPage() {
               </div>
             ) : null}
 
-            <Link href="/admin/matches" className="flex items-center justify-between p-6 rounded-2xl bg-blue-500/5 border border-blue-500/10 hover:bg-blue-500/10 transition-all group">
+            <Link href="/admin/matches" className="group flex items-center justify-between rounded-2xl border border-blue-500/10 bg-blue-500/5 p-4 transition-all hover:bg-blue-500/10 sm:p-5">
               <div className="flex items-center gap-4">
                 <span className="text-xl">⚽</span>
                 <div>
@@ -224,22 +224,22 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-[40px] border border-white/5 bg-white/[0.01] p-10 backdrop-blur-3xl">
-          <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white mb-8 leading-none">Quick <span className="text-neutral-500">Tools.</span></h2>
+        <div className="rounded-[32px] border border-white/5 bg-white/[0.01] p-6 backdrop-blur-3xl md:p-8">
+          <h2 className="mb-6 text-xl font-black italic uppercase leading-none tracking-tighter text-white">Quick <span className="text-neutral-500">Tools.</span></h2>
           <div className="grid grid-cols-2 gap-4">
-            <Link href="/admin/broadcast" className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-all text-left group block">
+            <Link href="/admin/broadcast" className="group block rounded-2xl border border-white/5 bg-white/[0.02] p-5 text-left transition-all hover:bg-white/5">
               <span className="text-lg block mb-4">📣</span>
               <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 group-hover:text-white transition-colors">Post Broadcast</span>
             </Link>
-            <Link href="/admin/matches" className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-all text-left group block">
+            <Link href="/admin/matches" className="group block rounded-2xl border border-white/5 bg-white/[0.02] p-5 text-left transition-all hover:bg-white/5">
               <span className="text-lg block mb-4">📅</span>
               <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 group-hover:text-white transition-colors">Reschedule Match</span>
             </Link>
-            <Link href="/admin/tournaments" className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-all text-left group block">
+            <Link href="/admin/tournaments" className="group block rounded-2xl border border-white/5 bg-white/[0.02] p-5 text-left transition-all hover:bg-white/5">
               <span className="text-lg block mb-4">🏆</span>
               <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 group-hover:text-white transition-colors">Season Config</span>
             </Link>
-            <Link href="/admin/venues" className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/5 transition-all text-left group block">
+            <Link href="/admin/venues" className="group block rounded-2xl border border-white/5 bg-white/[0.02] p-5 text-left transition-all hover:bg-white/5">
               <span className="text-lg block mb-4">📍</span>
               <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 group-hover:text-white transition-colors">Venues</span>
             </Link>
