@@ -1,10 +1,9 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/use-auth-store';
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+import { BROWSER_API_BASE_URL } from '@/lib/api-config';
 
 const apiClient = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: BROWSER_API_BASE_URL,
   withCredentials: true,
 });
 
@@ -48,7 +47,7 @@ apiClient.interceptors.response.use(
         if (!refreshRequest) {
           refreshRequest = axios
             .post(
-              `${apiBaseUrl}/auth/refresh-token`,
+              `${BROWSER_API_BASE_URL}/auth/refresh-token`,
               {},
               { withCredentials: true }
             )

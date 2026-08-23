@@ -1,8 +1,20 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { AuthState } from '@/types';
+import { BROWSER_API_BASE_URL } from '@/lib/api-config';
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
+const clearPersistedAuthState = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem('auth-storage');
+  } catch {
+    // HttpOnly-cookie authentication must still work when Safari storage is unavailable.
+  }
+};
+
+const clearLegacyTokenCookie = () => {
+  if (typeof document === 'undefined') return;
+  document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+};
 
 const setSessionMarker = () => {
   if (typeof document === 'undefined') return;
@@ -10,48 +22,41 @@ const setSessionMarker = () => {
   document.cookie = `admin_session=1; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${secure}`;
 };
 
-const clearSessionMarkers = () => {
+const clearLegacySessionMarkers = () => {
   if (typeof document === 'undefined') return;
   document.cookie = 'admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
   document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
 };
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      admin: null,
-      hasHydrated: false,
-      setAuth: (admin) => {
-        setSessionMarker();
-        set({ admin, hasHydrated: true });
-      },
-      refreshSession: () => {
-        setSessionMarker();
-      },
-      setHasHydrated: (val) => set({ hasHydrated: val }),
-      logout: () => {
-        clearSessionMarkers();
-        set({ admin: null });
+clearPersistedAuthState();
+clearLegacyTokenCookie();
 
-        if (typeof window !== 'undefined') {
-          void fetch(`${apiBaseUrl}/auth/logout`, {
-            method: 'POST',
-            credentials: 'include',
-            keepalive: true,
-          }).catch(() => undefined);
-        }
-      },
-    }),
-    {
-      name: 'auth-storage',
-      version: 3,
-      migrate: (persistedState) => ({
-        admin: (persistedState as Partial<AuthState> | undefined)?.admin ?? null,
-      }),
-      partialize: (state) => ({ admin: state.admin }),
-      onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true);
-      },
+export const useAuthStore = create<AuthState>()(
+  (set) => ({
+    admin: null,
+    // The HttpOnly cookie is authoritative; no browser storage hydration is required.
+    hasHydrated: true,
+    setAuth: (admin) => {
+      setSessionMarker();
+      set({ admin, hasHydrated: true });
+    },
+    refreshSession: () => {
+      setSessionMarker();
+      set({ hasHydrated: true });
+    },
+    setHasHydrated: (val) => set({ hasHydrated: val }),
+    logout: () => {
+      clearPersistedAuthState();
+      clearLegacySessionMarkers();
+      set({ admin: null });
+
+      if (typeof window !== 'undefined') {
+        void fetch(`${BROWSER_API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          credentials: 'include',
+          keepalive: true,
+        }).catch(() => undefined);
+      }
     }
-  )
+  })
 );

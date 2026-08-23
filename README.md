@@ -49,11 +49,11 @@ public/
 The frontend communicates with the Node.js/Express backend via a centralized `apiClient` located in `src/lib/api-client.ts`.
 
 ### Key Features:
-- **Base URL**: Configurable via `NEXT_PUBLIC_API_URL`.
+- **Browser API path**: Always `/api/v1` on the frontend origin. Next.js proxies that exact path to the backend configured by `BACKEND_API_URL`.
 - **Authentication**: Access and refresh JWTs stay in HttpOnly cookies; the browser does not persist them in local storage.
 - **Session Bootstrap**: `/auth/me` validates the signed-in administrator before protected UI is shown.
 - **Refresh Handling**: One coordinated refresh request retries an expired authenticated request; a failed refresh clears local session state.
-- **Cross-Origin Cookies**: Axios uses `withCredentials: true`, and the backend must list the frontend's exact origin.
+- **Safari-compatible sessions**: REST requests and cookies remain first-party on the frontend domain; tokens are never exposed to JavaScript.
 
 ---
 
@@ -66,13 +66,15 @@ The frontend communicates with the Node.js/Express backend via a centralized `ap
 ### 2. Environment Setup
 Create a `.env.local` file in the root directory:
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+BACKEND_API_URL=http://localhost:5000/api/v1
 NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 ```
 
-Set both values in the deployment environment before building. The backend's
-`CLIENT_URL` must contain the frontend's exact browser origin so cookies,
-origin checks, and Socket.IO agree; the localhost fallbacks are development-only.
+Set both values in the deployment environment before building. During migration,
+the existing `NEXT_PUBLIC_API_URL` is accepted as a server-side rewrite fallback,
+but browser code never calls it directly. The backend's `CLIENT_URL` must contain
+the frontend's exact browser origin so origin checks and Socket.IO agree; the
+localhost fallbacks are development-only.
 
 ### 3. Installation
 ```bash

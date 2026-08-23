@@ -34,7 +34,10 @@ function LoginForm() {
     setError('');
 
     try {
-      const response = await apiClient.post<LoginResponse, LoginResponse>('/auth/login', { email, password });
+      const response = await apiClient.post<LoginResponse, LoginResponse>('/auth/login', {
+        email: email.trim().toLowerCase(),
+        password,
+      });
       if (response.success) {
         setAuth(response.data.admin);
         window.location.href = from;
@@ -47,7 +50,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black px-6 font-outfit relative overflow-hidden">
+    <div className="relative flex min-h-screen items-center justify-center overflow-x-hidden bg-black px-6 py-8 font-outfit supports-[height:100dvh]:min-h-dvh sm:py-12">
       {/* Background Glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
 
@@ -63,7 +66,7 @@ function LoginForm() {
         <div className="rounded-[28px] sm:rounded-[40px] border border-white/5 bg-white/[0.02] p-7 sm:p-10 backdrop-blur-xl shadow-2xl">
           <form className="space-y-8" onSubmit={handleSubmit}>
             {error && (
-              <div className={`rounded-2xl p-4 text-xs font-bold uppercase tracking-widest border transition-all ${
+              <div role="alert" aria-live="polite" className={`rounded-2xl p-4 text-xs font-bold uppercase tracking-widest border transition-all ${
                 error.toLowerCase().includes('pending') 
                   ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
                   : 'bg-red-500/10 text-red-500 border-red-500/20'
@@ -74,24 +77,39 @@ function LoginForm() {
 
             <div className="space-y-6">
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Admin Email</label>
+                <label htmlFor="admin-email" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Admin Email</label>
                 <input
+                  id="admin-email"
+                  name="email"
                   type="email"
                   required
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="next"
                   placeholder="name@solidfm.com"
-                  className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all"
+                  className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-base text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
               <div className="group">
-                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Password</label>
+                <label htmlFor="admin-password" className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral-500 mb-3 block group-focus-within:text-blue-500 transition-colors">Password</label>
                 <div className="relative">
                   <input
+                    id="admin-password"
+                    name="password"
                     type={showPassword ? 'text' : 'password'}
                     required
+                    autoComplete="current-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="go"
                     placeholder="••••••••"
-                    className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all pr-14"
+                    className="block w-full rounded-2xl border border-white/5 bg-white/5 px-6 py-4 text-base text-white placeholder:text-neutral-700 focus:border-blue-500/50 focus:bg-white/[0.08] focus:outline-none transition-all pr-14"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -100,7 +118,8 @@ function LoginForm() {
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                     aria-pressed={showPassword}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
+                    aria-controls="admin-password"
+                    className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center text-neutral-500 transition-colors hover:text-white"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -116,6 +135,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
+              aria-busy={loading}
               className="group relative flex h-16 w-full items-center justify-center rounded-2xl bg-blue-600 text-lg font-bold text-white transition-all hover:bg-blue-500 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-xl shadow-blue-600/20"
             >
               <span className={loading ? 'opacity-0' : 'opacity-100'}>Sign In</span>
