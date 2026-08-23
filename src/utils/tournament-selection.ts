@@ -1,6 +1,10 @@
 export type TournamentStatus = 'upcoming' | 'ongoing' | 'completed';
 export type CompetitionDivision = 'men' | 'women';
 export type TournamentFormat = 'legacy_league' | 'two_group_knockout' | 'single_table_final';
+type TournamentFallbackOrder = readonly [
+  Exclude<TournamentStatus, 'ongoing'>,
+  Exclude<TournamentStatus, 'ongoing'>,
+];
 
 export interface TournamentSummary {
   _id: string;
@@ -51,10 +55,7 @@ export function isWomensTableTournament(tournament: TournamentSummary | null | u
 
 export function chooseTournament(
   tournaments: TournamentSummary[],
-  fallbackOrder: readonly [
-    Exclude<TournamentStatus, 'ongoing'>,
-    Exclude<TournamentStatus, 'ongoing'>,
-  ],
+  fallbackOrder: TournamentFallbackOrder,
 ) {
   const chooseFrom = (candidates: TournamentSummary[]) => preferredForStatus(candidates, 'ongoing')
     ?? preferredForStatus(candidates, fallbackOrder[0])
@@ -63,39 +64,100 @@ export function chooseTournament(
   return chooseFrom(mensTournaments) ?? chooseFrom(tournaments);
 }
 
+export function orderPublicTournaments<Tournament extends TournamentSummary>(
+  tournaments: Tournament[],
+  fallbackOrder: TournamentFallbackOrder,
+) {
+  const statusOrder: Record<TournamentStatus, number> = {
+    ongoing: 0,
+    [fallbackOrder[0]]: 1,
+    [fallbackOrder[1]]: 2,
+  } as Record<TournamentStatus, number>;
+
+  return [...tournaments].sort((left, right) => {
+    const divisionDifference = (tournamentDivision(left) === 'men' ? 0 : 1) -
+      (tournamentDivision(right) === 'men' ? 0 : 1);
+    if (divisionDifference !== 0) return divisionDifference;
+
+    const statusDifference = statusOrder[left.status] - statusOrder[right.status];
+    if (statusDifference !== 0) return statusDifference;
+
+    const dateDifference = left.status === 'upcoming'
+      ? startTime(left) - startTime(right)
+      : startTime(right) - startTime(left);
+    if (dateDifference !== 0) return dateDifference;
+
+    const nameDifference = left.name.localeCompare(right.name);
+    return nameDifference !== 0 ? nameDifference : left._id.localeCompare(right._id);
+  });
+}
+
 export function tournamentLabel(tournament: TournamentSummary) {
   const division = tournamentDivision(tournament) === 'women' ? 'Women' : 'Men';
   return `${tournament.name} — Season ${tournament.season} • ${division} (${tournament.status})`;
 }
 
-const PUBLIC_TOURNAMENT_STORAGE_KEY = 'solidfm:public-tournament:v1';
+const PUBLIC_TOURNAMENT_STORAGE_KEY = 'solidfm:public-tournament:v2';
+
+interface RetainedPublicTournament {
+  schemaVersion: 2;
+  tournamentId: string;
+  selectedBy: 'user';
+}
+
+function readRetainedPublicTournament(): string | null {
+  try {
+    const storedValue = window.localStorage.getItem(PUBLIC_TOURNAMENT_STORAGE_KEY);
+    if (!storedValue) return null;
+    const parsed: unknown = JSON.parse(storedValue);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const retained = parsed as Partial<RetainedPublicTournament>;
+    return retained.schemaVersion === 2 &&
+      retained.selectedBy === 'user' &&
+      typeof retained.tournamentId === 'string' &&
+      retained.tournamentId
+      ? retained.tournamentId
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeRetainedPublicTournament(tournamentId: string) {
+  try {
+    const retained: RetainedPublicTournament = {
+      schemaVersion: 2,
+      tournamentId,
+      selectedBy: 'user',
+    };
+    window.localStorage.setItem(PUBLIC_TOURNAMENT_STORAGE_KEY, JSON.stringify(retained));
+  } catch {
+    // The URL choice and deterministic men's default still work without storage.
+  }
+}
 
 export function resolvePublicTournament(
   tournaments: TournamentSummary[],
-  fallbackOrder: readonly [Exclude<TournamentStatus, 'ongoing'>, Exclude<TournamentStatus, 'ongoing'>],
+  fallbackOrder: TournamentFallbackOrder,
 ) {
   if (typeof window !== 'undefined') {
     const queryId = new URL(window.location.href).searchParams.get('tournament');
-    let storedId: string | null = null;
-    try {
-      storedId = window.localStorage.getItem(PUBLIC_TOURNAMENT_STORAGE_KEY);
-    } catch {
-      // Query selection and the deterministic fallback still work without storage.
+    const querySelection = tournaments.find((tournament) => tournament._id === queryId);
+    if (querySelection) {
+      storeRetainedPublicTournament(querySelection._id);
+      return querySelection;
     }
-    const retained = tournaments.find((tournament) => tournament._id === queryId)
-      ?? tournaments.find((tournament) => tournament._id === storedId);
-    if (retained) return retained;
+
+    const storedId = readRetainedPublicTournament();
+    const storedSelection = tournaments.find((tournament) => tournament._id === storedId);
+    if (storedSelection) return storedSelection;
   }
   return chooseTournament(tournaments, fallbackOrder);
 }
 
 export function retainPublicTournament(tournamentId: string) {
   if (typeof window === 'undefined' || !tournamentId) return;
-  try {
-    window.localStorage.setItem(PUBLIC_TOURNAMENT_STORAGE_KEY, tournamentId);
-  } catch {
-    // Selection still works for this page when storage is unavailable.
-  }
+  storeRetainedPublicTournament(tournamentId);
   const url = new URL(window.location.href);
   url.searchParams.set('tournament', tournamentId);
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);

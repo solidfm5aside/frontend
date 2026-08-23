@@ -21,6 +21,7 @@ import { Match, ApiResponse } from '@/types';
 import {
   isMensGroupTournament,
   isWomensTableTournament,
+  orderPublicTournaments,
   resolvePublicTournament,
   retainPublicTournament,
   tournamentLabel,
@@ -91,10 +92,10 @@ export default function FixturesClient() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = resolvePublicTournament(response.data, ['upcoming', 'completed']);
-        setTournaments(response.data);
+        const orderedTournaments = orderPublicTournaments(response.data, ['upcoming', 'completed']);
+        const preferredTournament = resolvePublicTournament(orderedTournaments, ['upcoming', 'completed']);
+        setTournaments(orderedTournaments);
         setSelectedTournamentId(preferredTournament?._id ?? '');
-        if (preferredTournament) retainPublicTournament(preferredTournament._id);
         foregroundRequestPending.current = Boolean(preferredTournament);
         if (!preferredTournament) setIsLoading(false);
       } catch (error: unknown) {

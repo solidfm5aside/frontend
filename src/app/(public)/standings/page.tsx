@@ -13,6 +13,7 @@ import { CompetitionGroupKey, GroupedStandings, GroupStandingRow } from '@/types
 import {
   isMensGroupTournament,
   isWomensTableTournament,
+  orderPublicTournaments,
   resolvePublicTournament,
   retainPublicTournament,
   tournamentDivision,
@@ -136,12 +137,12 @@ export default function StandingsPage() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = resolvePublicTournament(response.data, ['completed', 'upcoming']);
-        setTournaments(response.data);
+        const orderedTournaments = orderPublicTournaments(response.data, ['completed', 'upcoming']);
+        const preferredTournament = resolvePublicTournament(orderedTournaments, ['completed', 'upcoming']);
+        setTournaments(orderedTournaments);
         setSelectedTournamentId(preferredTournament?._id ?? '');
-        if (preferredTournament) retainPublicTournament(preferredTournament._id);
         foregroundRequestPending.current = Boolean(preferredTournament);
-        if (response.data.length === 0) setIsLoading(false);
+        if (orderedTournaments.length === 0) setIsLoading(false);
       } catch (loadError: unknown) {
         if (cancelled) return;
         setTournaments([]);

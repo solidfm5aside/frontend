@@ -14,6 +14,7 @@ import { Match, ApiResponse } from '@/types';
 import {
   isMensGroupTournament,
   isWomensTableTournament,
+  orderPublicTournaments,
   resolvePublicTournament,
   retainPublicTournament,
   tournamentDivision,
@@ -63,10 +64,10 @@ export default function ResultsClient() {
         if (!response.success) throw new Error(response.message || 'Tournaments could not be loaded');
         if (cancelled) return;
 
-        const preferredTournament = resolvePublicTournament(response.data, ['completed', 'upcoming']);
-        setTournaments(response.data);
+        const orderedTournaments = orderPublicTournaments(response.data, ['completed', 'upcoming']);
+        const preferredTournament = resolvePublicTournament(orderedTournaments, ['completed', 'upcoming']);
+        setTournaments(orderedTournaments);
         setSelectedTournamentId(preferredTournament?._id ?? '');
-        if (preferredTournament) retainPublicTournament(preferredTournament._id);
         foregroundRequestPending.current = Boolean(preferredTournament);
         if (!preferredTournament) setIsLoading(false);
       } catch (error: unknown) {

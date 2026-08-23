@@ -9,6 +9,7 @@ import { PageSpinner } from '@/components/ui/Spinner';
 import {
   isMensGroupTournament,
   isWomensTableTournament,
+  orderPublicTournaments,
   resolvePublicTournament,
   retainPublicTournament,
   tournamentLabel,
@@ -60,12 +61,14 @@ export default function BracketPage() {
           throw new Error(response.message || 'The tournaments could not be loaded.');
         }
 
-        const tournaments = Array.isArray(response.data) ? response.data : [];
+        const tournaments = orderPublicTournaments(
+          Array.isArray(response.data) ? response.data : [],
+          ['completed', 'upcoming'],
+        );
         setResult({ requestKey, tournaments, error: null });
         setSelectedId((currentId) => {
           if (tournaments.some((tournament) => tournament._id === currentId)) return currentId;
           const preferred = resolvePublicTournament(tournaments, ['completed', 'upcoming']);
-          if (preferred) retainPublicTournament(preferred._id);
           return preferred?._id ?? '';
         });
       } catch (error) {
