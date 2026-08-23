@@ -71,10 +71,11 @@ export function formatTime(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Time TBC';
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) return 'Time TBC';
-  const time = date.toLocaleTimeString('en-GB', {
+  const time = date.toLocaleTimeString('en-US', {
     timeZone: LAGOS_TIME_ZONE,
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   });
   return `${time} WAT`;
 }
