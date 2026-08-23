@@ -349,7 +349,7 @@ export default function FixturesClient() {
 
                     <div className="flex items-center justify-between gap-2 sm:gap-6 md:gap-12">
                       <div className="flex-1 flex flex-col md:flex-row items-center justify-end gap-3 md:gap-6 text-right min-w-0">
-                        <span className="text-[10px] sm:text-sm md:text-3xl font-black uppercase tracking-tighter italic break-words leading-tight hidden sm:block">{match.homeTeam?.name}</span>
+                        <span className="min-w-0 max-w-full text-[10px] sm:text-sm md:text-3xl font-black uppercase tracking-tighter italic break-words leading-tight hidden sm:block">{match.homeTeam?.name}</span>
                         <TeamAvatar name={match.homeTeam.name} logo={match.homeTeam.logo} size="lg" />
                         <span className="text-[9px] font-black uppercase tracking-widest italic text-white leading-tight block sm:hidden text-center">{match.homeTeam?.name}</span>
                       </div>
@@ -385,7 +385,7 @@ export default function FixturesClient() {
                         </div>
 
                       <div className="flex-1 flex flex-col md:flex-row-reverse items-center justify-end gap-3 md:gap-6 text-left min-w-0">
-                        <span className="text-[10px] sm:text-sm md:text-3xl font-black uppercase tracking-tighter italic break-words leading-tight hidden sm:block">{match.awayTeam?.name}</span>
+                        <span className="min-w-0 max-w-full text-[10px] sm:text-sm md:text-3xl font-black uppercase tracking-tighter italic break-words leading-tight hidden sm:block">{match.awayTeam?.name}</span>
                         <TeamAvatar name={match.awayTeam.name} logo={match.awayTeam.logo} size="lg" />
                         <span className="text-[9px] font-black uppercase tracking-widest italic text-white leading-tight block sm:hidden text-center">{match.awayTeam?.name}</span>
                       </div>
