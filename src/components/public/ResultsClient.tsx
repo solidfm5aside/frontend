@@ -10,7 +10,7 @@ import { FullPageSpinner, PageSpinner } from '@/components/ui/Spinner';
 import { formatMatchDayKey, formatTime, getDayKey, TBC_DAY_KEY } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
-import { Match, ApiResponse } from '@/types';
+import { Match, ApiResponse, Team } from '@/types';
 import {
   isMensGroupTournament,
   isWomensTableTournament,
@@ -30,6 +30,7 @@ const WOMENS_RESULT_STAGES = [
 
 export default function ResultsClient() {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [registeredTeams, setRegisteredTeams] = useState<Team[]>([]);
   const [tournaments, setTournaments] = useState<TournamentSummary[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -46,6 +47,23 @@ export default function ResultsClient() {
     () => tournaments.find((tournament) => tournament._id === selectedTournamentId) ?? null,
     [selectedTournamentId, tournaments],
   );
+  useEffect(() => {
+    if (!selectedTournamentId || !isMensGroupTournament(activeTournament)) return;
+    let cancelled = false;
+    void apiClient.get<ApiResponse<Team[]>, ApiResponse<Team[]>>('/teams?limit=100')
+      .then((response) => {
+        if (!cancelled && response.success && Array.isArray(response.data)) setRegisteredTeams(response.data);
+      })
+      .catch(() => { /* Names remain visible when team logos are unavailable. */ });
+    return () => { cancelled = true; };
+  }, [selectedTournamentId, activeTournament]);
+
+  const semiFinalTeam = (name: string) => {
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return registeredTeams.find((team) => team.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalized)
+      ?? matches.flatMap((match) => [match.homeTeam, match.awayTeam])
+        .find((team) => team?.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalized);
+  };
   const isMensCompetition = isMensGroupTournament(activeTournament);
   const isWomensCompetition = isWomensTableTournament(activeTournament);
   const isLegacyTournament = Boolean(activeTournament) && !isMensCompetition && !isWomensCompetition;
@@ -246,6 +264,38 @@ export default function ResultsClient() {
 
       <section className="py-12 md:py-24 px-4 md:px-6">
         <div className="container mx-auto max-w-5xl">
+          {!isLoading && !loadError && isMensCompetition && !matches.some((match) => match.stage === 'semi_finals') ? (
+            <section className="mb-10 space-y-5" aria-label="Men's semi-final results">
+              <div className="text-center">
+                <h3 className="text-2xl font-black uppercase text-white">Men&apos;s Semi-Final Results</h3>
+                <p className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-400">Played • 11 October 2026</p>
+                <p className="mt-2 text-xs text-neutral-400">Confirmed results supplied by the tournament organizer. Goal-scorer details will appear once entered in Match Centre.</p>
+              </div>
+              {[
+                { slot: 'SF1', home: 'Samba Boys FC', away: 'Smooth Citizens FC', homeScore: 1, awayScore: 0, venue: 'Wembley Arena' },
+                { slot: 'SF2', home: 'Lala Brothers FC', away: 'Mrphil Photo FC', homeScore: 2, awayScore: 1, venue: 'Tribu Arena' },
+              ].map((result) => (
+                <div key={result.slot} className="rounded-3xl border border-amber-500/20 bg-white/[0.03] p-6 md:p-10">
+                  <div className="mb-6 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-widest">
+                    <span className="text-amber-400">{result.slot}</span>
+                    <span className="text-emerald-400">Full Time</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <TeamAvatar name={result.home} logo={semiFinalTeam(result.home)?.logo} size="lg" />
+                      <span className="text-sm font-black uppercase text-white md:text-xl">{result.home}</span>
+                    </div>
+                    <span className="text-xl font-black text-amber-400 md:text-3xl">{result.homeScore} – {result.awayScore}</span>
+                    <div className="flex flex-col items-center gap-3">
+                      <TeamAvatar name={result.away} logo={semiFinalTeam(result.away)?.logo} size="lg" />
+                      <span className="text-sm font-black uppercase text-white md:text-xl">{result.away}</span>
+                    </div>
+                  </div>
+                  <p className="mt-6 text-center text-xs font-bold uppercase tracking-wider text-neutral-400">11 October 2026 • 3:00 PM • {result.venue}</p>
+                </div>
+              ))}
+            </section>
+          ) : null}
           {isLoading ? (
             <PageSpinner />
           ) : loadError ? (
