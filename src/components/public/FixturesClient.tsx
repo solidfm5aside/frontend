@@ -272,6 +272,32 @@ export default function FixturesClient() {
 
       <section className="py-12 md:py-24 px-4 md:px-6">
         <div className="container mx-auto max-w-5xl">
+          {!isLoading && !loadError && isMensCompetition && (activeStage === 'semi_finals' || activeStage === 'all') && !matches.some((match) => match.stage === 'semi_finals') ? (
+            <section className="mb-10 space-y-5" aria-label="Official men's semi-final fixtures">
+              <div className="text-center">
+                <h3 className="text-2xl font-black uppercase text-white">Men&apos;s Semi-Finals</h3>
+                <p className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-400">Played • Results awaiting entry</p>
+                <p className="mt-2 text-xs text-neutral-400">Official pairings; scores and goal scorers will appear after they are recorded in Match Centre.</p>
+              </div>
+              {[
+                { slot: 'SF1', home: 'Samba Boys FC', away: 'Smooth Citizens FC', venue: 'Wembley Arena' },
+                { slot: 'SF2', home: 'Lala Brothers FC', away: 'Mrphil Photo FC', venue: 'Tribu Arena' },
+              ].map((fixture) => (
+                <div key={fixture.slot} className="rounded-3xl border border-amber-500/20 bg-white/[0.03] p-6 md:p-10">
+                  <div className="mb-6 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-widest">
+                    <span className="text-amber-400">{fixture.slot}</span>
+                    <span className="text-neutral-400">Awaiting result entry</span>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
+                    <span className="text-sm font-black uppercase text-white md:text-xl">{fixture.home}</span>
+                    <span className="text-lg font-black text-amber-400">VS</span>
+                    <span className="text-sm font-black uppercase text-white md:text-xl">{fixture.away}</span>
+                  </div>
+                  <p className="mt-6 text-center text-xs font-bold uppercase tracking-wider text-neutral-400">11 October 2026 • 3:00 PM • {fixture.venue}</p>
+                </div>
+              ))}
+            </section>
+          ) : null}
           {isLoading ? (
             <PageSpinner />
           ) : loadError ? (
