@@ -1403,14 +1403,14 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                 })}
               </div>
 
-              {allowedActions.progressKnockout ? (
+              {progress.workflowState === 'knockout_stage' ? (
                 <div className="flex flex-col gap-4 rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-black text-white">{humanize(progressionStage)}: {resolvedProgressionNodes}/{progressionNodes.length} validated result(s)</p>
-                    <p className="mt-1 text-xs text-neutral-400">After every result is validated, record the winners in the next official round. Its kickoff and venue remain TBC until entered in Match Centre.</p>
+                    <p className="mt-1 text-xs text-neutral-400">{progressionReady ? 'All current-round winners are recorded. Confirm the next official round; its kickoff and venue remain TBC until entered in Match Centre.' : 'Progression is unavailable until every match in the current round is completed with an explicitly recorded winner. Check each result in Match Centre.'}</p>
                   </div>
                   {canManageCompetition ? (
-                    <button type="button" onClick={() => void handleProgressKnockout()} disabled={!progressionReady || Boolean(busyAction)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
+                    <button type="button" onClick={() => void handleProgressKnockout()} disabled={!allowedActions.progressKnockout || !progressionReady || Boolean(busyAction)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
                       {busyAction === 'progress-knockout' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />} {progressionButtonLabel(progress.workflowState, tournament.currentStage)}
                     </button>
                   ) : <span className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-neutral-600"><LockKeyhole className="h-3.5 w-3.5" /> Administrator access required</span>}
