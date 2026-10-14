@@ -17,7 +17,7 @@ import {
 } from '@/utils/format';
 import { useRevealOnScroll } from '@/hooks/use-reveal-on-scroll';
 import { useSocket } from '@/hooks/use-socket';
-import { Match, ApiResponse } from '@/types';
+import { Match, ApiResponse, Team } from '@/types';
 import {
   isMensGroupTournament,
   isWomensTableTournament,
@@ -55,6 +55,7 @@ const WOMENS_COMPETITION_STAGES = [
 
 export default function FixturesClient() {
   const [matches, setMatches] = useState<Match[]>([]);
+  const [registeredTeams, setRegisteredTeams] = useState<Team[]>([]);
   const [tournaments, setTournaments] = useState<TournamentSummary[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +71,25 @@ export default function FixturesClient() {
     () => tournaments.find((tournament) => tournament._id === selectedTournamentId) ?? null,
     [selectedTournamentId, tournaments],
   );
+  useEffect(() => {
+    if (!selectedTournamentId || !isMensGroupTournament(activeTournament)) {
+      return;
+    }
+    let cancelled = false;
+    void apiClient.get<ApiResponse<Team[]>, ApiResponse<Team[]>>('/teams?limit=100')
+      .then((response) => {
+        if (!cancelled && response.success && Array.isArray(response.data)) setRegisteredTeams(response.data);
+      })
+      .catch(() => { /* Existing match logos remain the fallback. */ });
+    return () => { cancelled = true; };
+  }, [selectedTournamentId, activeTournament]);
+
+  const officialSemiFinalTeam = (name: string) => {
+    const normalized = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return registeredTeams.find((team) => team.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalized)
+      ?? matches.flatMap((match) => [match.homeTeam, match.awayTeam])
+        .find((team) => team?.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normalized);
+  };
   const isMensCompetition = isMensGroupTournament(activeTournament);
   const isWomensCompetition = isWomensTableTournament(activeTournament);
   const stageFilters = isWomensCompetition
@@ -289,9 +309,9 @@ export default function FixturesClient() {
                     <span className="text-neutral-400">Awaiting result entry</span>
                   </div>
                   <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
-                    <span className="text-sm font-black uppercase text-white md:text-xl">{fixture.home}</span>
+                    <div className="flex flex-col items-center gap-3"><TeamAvatar name={fixture.home} logo={officialSemiFinalTeam(fixture.home)?.logo} size="lg" /><span className="text-sm font-black uppercase text-white md:text-xl">{fixture.home}</span></div>
                     <span className="text-lg font-black text-amber-400">VS</span>
-                    <span className="text-sm font-black uppercase text-white md:text-xl">{fixture.away}</span>
+                    <div className="flex flex-col items-center gap-3"><TeamAvatar name={fixture.away} logo={officialSemiFinalTeam(fixture.away)?.logo} size="lg" /><span className="text-sm font-black uppercase text-white md:text-xl">{fixture.away}</span></div>
                   </div>
                   <p className="mt-6 text-center text-xs font-bold uppercase tracking-wider text-neutral-400">11 October 2026 • 3:00 PM • {fixture.venue}</p>
                 </div>
