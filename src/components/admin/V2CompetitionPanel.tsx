@@ -1391,7 +1391,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                                {node.match ? (
                                  <div className="mt-3 flex flex-col gap-2 border-t border-white/5 pt-3 text-[8px] font-bold uppercase tracking-wider text-neutral-600 sm:flex-row sm:items-center sm:justify-between">
                                    <span className={schedulePending ? 'text-yellow-300' : undefined}>{scheduleLabel} • {node.match.venue ?? 'Venue TBC'} • Africa/Lagos</span>
-                                   {canManageCompetition ? <Link href={`/admin/matches?tournament=${tournamentId}&match=${node.match._id}`} className="inline-flex min-h-10 items-center text-white underline decoration-white/20 underline-offset-4">{schedulePending ? 'Add official schedule' : 'Edit schedule'}</Link> : null}
+                                   {canManageCompetition ? <Link href={`/admin/matches?tournament=${tournamentId}&match=${node.match._id}`} className="inline-flex min-h-10 items-center text-white underline decoration-white/20 underline-offset-4">{node.match.status === 'completed' && !node.match.winner ? 'Confirm knockout winner' : schedulePending ? 'Add official schedule' : 'Open match controller'}</Link> : null}
                                  </div>
                                ) : null}
                              </div>
@@ -1408,6 +1408,7 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                   <div>
                     <p className="text-sm font-black text-white">{humanize(progressionStage)}: {resolvedProgressionNodes}/{progressionNodes.length} validated result(s)</p>
                     <p className="mt-1 text-xs text-neutral-400">{progressionReady ? 'All current-round winners are recorded. Confirm the next official round; its kickoff and venue remain TBC until entered in Match Centre.' : 'Progression is unavailable until every match in the current round is completed with an explicitly recorded winner. Check each result in Match Centre.'}</p>
+                    {!progressionReady && progressionNodes.some((node) => node.match?.status === 'completed' && !node.match.winner) ? <p className="mt-2 text-xs font-semibold text-amber-300">Completed knockout scores do not automatically confirm advancing teams. Use Confirm knockout winner on each completed match above, then confirm the next round. Existing scores and goal events are preserved.</p> : null}
                   </div>
                   {canManageCompetition ? (
                     <button type="button" onClick={() => void handleProgressKnockout()} disabled={!allowedActions.progressKnockout || !progressionReady || Boolean(busyAction)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
