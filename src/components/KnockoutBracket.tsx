@@ -375,7 +375,11 @@ export default function KnockoutBracket({ tournamentId, filterStage, finalOnly =
     );
   }
 
-  const stages = getAvailableStages(result.bracket);
+  const availableStages = getAvailableStages(result.bracket);
+  // Show the men's complete knockout pathway before later rounds have fixtures.
+  const stages = finalOnly || filterStage || !availableStages.includes('quarter_finals')
+    ? availableStages
+    : ['quarter_finals', 'semi_finals', 'final'];
   const displayStage = filterStage || activeTab || stages[0] || '';
   const stageMatches = result.bracket[displayStage] || [];
 
