@@ -164,7 +164,8 @@ export default function FixturesClient() {
 
   // Filter & Group matches
   const filteredMatches = useMemo(() => {
-    const active = matches.filter((match) => match.status === 'scheduled' || match.status === 'live');
+    // Fixtures are the complete tournament record, including played knockout rounds.
+    const active = matches.filter((match) => ['scheduled', 'live', 'completed'].includes(match.status));
     if (activeStage === 'all') return active;
     return active.filter(m => m.stage === activeStage);
   }, [matches, activeStage]);
