@@ -894,6 +894,46 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
     }
   };
 
+  const repairQuarterFinalProgression = async () => {
+    if (
+      !canManageCompetition || busyAction ||
+      progress.workflowState !== 'knockout_stage' ||
+      progressionStage !== 'quarter_finals'
+    ) return;
+    const unresolved = progressionNodes.filter(
+      (node) => node.match?.status === 'completed' && !node.match.winner,
+    );
+    if (progressionNodes.length !== 4 || unresolved.length === 0 ||
+        !progressionNodes.every((node) => node.match?.status === 'completed')) {
+      toast.error('Expected four completed Quarter-Finals with missing winner confirmations');
+      return;
+    }
+    if (!window.confirm(
+      'Repair missing Quarter-Final winners from their recorded scores? Existing scores and goal events will not change. The backend may automatically create Semi-Final matches after the final winner is recovered.',
+    )) return;
+    setBusyAction('repair-quarter-finals');
+    try {
+      for (const node of unresolved) {
+        const match = node.match!;
+        if (match.homeScore === match.awayScore) {
+          throw new Error('A tied Quarter-Final needs a recorded penalty-shootout winner');
+        }
+        const response = await apiClient.patch<ApiResponse<unknown>, ApiResponse<unknown>>(
+          `/matches/${match._id}/status`,
+          { status: 'completed' },
+        );
+        if (!response.success) throw new Error(response.message || 'Failed to recover winner');
+      }
+      toast.success('Quarter-Final winner recovery submitted; refreshing bracket');
+      await fetchCompetition(true);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Could not repair Quarter-Final progression'));
+      await fetchCompetition(true);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const handleProgressKnockout = async () => {
     if (!canManageCompetition || !allowedActions.progressKnockout || !progressionReady || busyAction) return;
     const actionLabel = progressionButtonLabel(progress.workflowState, tournament.currentStage);
@@ -1408,7 +1448,11 @@ export function V2CompetitionPanel({ tournamentId, canManageCompetition }: V2Com
                   <div>
                     <p className="text-sm font-black text-white">{humanize(progressionStage)}: {resolvedProgressionNodes}/{progressionNodes.length} validated result(s)</p>
                     <p className="mt-1 text-xs text-neutral-400">{progressionReady ? 'All current-round winners are recorded. Confirm the next official round; its kickoff and venue remain TBC until entered in Match Centre.' : 'Progression is unavailable until every match in the current round is completed with an explicitly recorded winner. Check each result in Match Centre.'}</p>
-                    {!progressionReady && progressionNodes.some((node) => node.match?.status === 'completed' && !node.match.winner) ? <p className="mt-2 text-xs font-semibold text-amber-300">Completed knockout scores do not automatically confirm advancing teams. Use Confirm knockout winner on each completed match above, then confirm the next round. Existing scores and goal events are preserved.</p> : null}
+                    {!progressionReady && progressionStage === 'quarter_finals' && progressionNodes.length === 4 && progressionNodes.every((node) => node.match?.status === 'completed') && progressionNodes.some((node) => !node.match?.winner) ? (
+                      <button type="button" onClick={() => void repairQuarterFinalProgression()} disabled={Boolean(busyAction) || !canManageCompetition} className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-amber-500 px-4 text-xs font-black uppercase text-black disabled:opacity-40">
+                        {busyAction === 'repair-quarter-finals' ? 'Repairing winners…' : 'Repair Quarter-Final Progression'}
+                      </button>
+                    ) : null}
                   </div>
                   {canManageCompetition ? (
                     <button type="button" onClick={() => void handleProgressKnockout()} disabled={!allowedActions.progressKnockout || !progressionReady || Boolean(busyAction)} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[9px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-40">
