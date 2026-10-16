@@ -159,10 +159,10 @@ export default function ResultsClient() {
 
   // RESULTS: Newest days first (Descending)
   const sortedDays = useMemo(() => Object.keys(matchesByDay).sort((a, b) => {
-    if (a === TBC_DAY_KEY) return 1;
-    if (b === TBC_DAY_KEY) return -1;
+    if (a === TBC_DAY_KEY) return isMensCompetition ? -1 : 1;
+    if (b === TBC_DAY_KEY) return isMensCompetition ? 1 : -1;
     return b.localeCompare(a);
-  }), [matchesByDay]);
+  }), [matchesByDay, isMensCompetition]);
 
   // Keep the newest valid matchday selected as tournaments change.
   useEffect(() => {
@@ -285,7 +285,7 @@ export default function ResultsClient() {
 
                 <div className="text-center min-w-0 px-2 md:px-4">
                   <h3 className="text-sm md:text-3xl font-black italic text-white uppercase tracking-tighter truncate leading-none">
-                    {selectedDate ? formatMatchDayKey(selectedDate) : '—'}
+                    {selectedDate === TBC_DAY_KEY && isMensCompetition ? 'Completed • Date not recorded' : selectedDate ? formatMatchDayKey(selectedDate) : '—'}
                   </h3>
                   <p className="text-[8px] md:text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mt-2 md:mt-3">
                     Results • Record {currentIndex + 1} of {totalDays} • {currentDayMatches.length} Matches
@@ -360,7 +360,7 @@ export default function ResultsClient() {
                           </div>
                           <div className="flex items-center gap-1 text-[7px] md:text-xs font-bold text-neutral-600 tracking-widest uppercase">
                             <Clock className="h-2 w-2 md:h-3.5 md:w-3.5" />
-                            {formatTime(match.date)}
+                            {!match.date && isMensCompetition ? 'Full time' : formatTime(match.date)}
                           </div>
                           {match.shootoutScore ? (
                             <div className="rounded-full border border-yellow-400/20 bg-yellow-400/10 px-2.5 py-1 text-[7px] font-black uppercase tracking-widest text-yellow-300 md:text-[9px]">
